@@ -1,4 +1,5 @@
 // Morning brief. pg_cron calls this hourly; each user gets theirs at their local brief hour.
+import { plain } from "../shared/channels.ts";
 import { admin, clip, handle, isCron, json, localNow, Profile, requireUser } from "../shared/util.ts";
 import { claude, MODELS, textOf } from "../shared/ai.ts";
 import { accessToken, calendarList } from "../shared/google.ts";
@@ -67,6 +68,6 @@ async function makeBrief(p: Profile, force: boolean) {
     content = textOf(res);
   }
   await db.from("briefs").upsert({ user_id: p.id, brief_date: now.date, content }, { onConflict: "user_id,brief_date" });
-  if (!force) await notify({ user_id: p.id, title: "Your morning brief is ready", body: content.replace(/[*#]/g, "").slice(0, 140), link: "#/today", why: `You set your brief for ${p.brief_hour}:00`, importance: 2 });
+  if (!force) await notify({ user_id: p.id, title: "Your morning brief is ready", body: content.replace(/[*#]/g, "").slice(0, 140), link: "#/today", why: `You set your brief for ${p.brief_hour}:00`, importance: 2, text: `Good morning ☀️\n\n${plain(content)}` });
   return { brief_date: now.date, content };
 }

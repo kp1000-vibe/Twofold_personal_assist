@@ -4,6 +4,7 @@ import { admin, HttpError, Profile } from "./util.ts";
 import { jev, noul } from "./ai.ts";
 import { accessToken, calendarDelete, calendarInsert, gmailSend } from "./google.ts";
 import { pushTo } from "./push.ts";
+import { textUser } from "./channels.ts";
 
 export const UNDO_WINDOW_MIN = 5;
 
@@ -23,13 +24,19 @@ const THRESHOLD: Record<string, number> = { quiet: 2.5, balanced: 1.5, chatty: 0
  */
 export async function notify(row: {
   user_id: string; title: string; body?: string | null; link?: string; why: string; importance?: number;
+  /** fuller text for iMessage, SMS or WhatsApp; defaults to title plus body */
+  text?: string;
 }) {
   const importance = row.importance ?? 2;
   const { data: p } = await admin().from("profiles").select("interrupt_level").eq("id", row.user_id).maybeSingle();
   const quiet = importance < (THRESHOLD[p?.interrupt_level ?? "balanced"] ?? 1.5);
-  const { error } = await admin().from("notifications").insert({ ...row, importance, quiet });
+  const { text, ...dbRow } = row;
+  const { error } = await admin().from("notifications").insert({ ...dbRow, importance, quiet });
   if (error) console.error("notify", error.message);
-  if (!quiet) await pushTo(row.user_id, { title: row.title, body: row.body ?? row.why, link: row.link });
+  if (!quiet) {
+    await pushTo(row.user_id, { title: row.title, body: row.body ?? row.why, link: row.link });
+    await textUser(row.user_id, text ?? `${row.title}${row.body ? `\n${row.body}` : ""}`);
+  }
 }
 
 type NewAction = {
@@ -102,7 +109,7 @@ export async function queueAction(a: NewAction, opts: { upsert?: boolean; forceA
     await logActivity({ user_id: a.user_id, kind: "blocked", title: `Did not do: ${a.title}`, why, ref_type: "action", ref_id: id });
   } else if (status === "scheduled") {
     await logActivity({ user_id: a.user_id, kind: "scheduled", title: `Will do in ${UNDO_WINDOW_MIN} min: ${a.title}`, why, ref_type: "action", ref_id: id, undo: { type: "cancel_action", action_id: id } });
-    await notify({ user_id: a.user_id, title: `Going ahead in ${UNDO_WINDOW_MIN} min: ${a.title}`, body: "Tap to cancel", link: "#/approvals", why: why!, importance: 2 });
+    await notify({ user_id: a.user_id, title: `Going ahead in ${UNDO_WINDOW_MIN} min: ${a.title}`, body: "Tap to cancel", link: "#/approvals", why: why!, importance: 2, text: `Going ahead in ${UNDO_WINDOW_MIN} min: ${a.title}\n${why}\nTo stop it, open Approvals in the app and tap Cancel.` });
   }
   return { id, status, why };
 }

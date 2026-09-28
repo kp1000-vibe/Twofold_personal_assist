@@ -1,0 +1,4 @@
+project_id = "twofold"
+
+[functions.api]
+verify_jwt = false

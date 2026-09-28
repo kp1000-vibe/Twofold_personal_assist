@@ -1,4 +1,5 @@
 // Background execution: every 2 minutes pick up queued jobs and keep working after the app is closed.
+import { plain } from "../shared/channels.ts";
 import { admin, clip, handle, HttpError, isCron, json, Profile } from "../shared/util.ts";
 import { runAgent } from "../shared/agent.ts";
 import { logActivity, notify } from "../shared/trust.ts";
@@ -21,7 +22,7 @@ export default handle(async (req) => {
       await db.from("jobs").update({ status: "done", result: reply, finished_at: new Date().toISOString() }).eq("id", job.id);
       const { data: msg } = await db.from("messages").insert({ user_id: job.user_id, role: "assistant", content: `**Background job finished:** ${clip(job.task, 120)}\n\n${reply}`, meta: { ...meta, background: true, job_id: job.id } }).select("id").single();
       if (msg) await indexText(job.user_id, "message", msg.id, `Background result for ${job.task}: ${reply}`);
-      await notify({ user_id: job.user_id, title: `Done: ${clip(job.task, 80)}`, body: clip(reply, 140), link: "#/chat", why: "You asked me to work on this in the background", importance: 2.5 });
+      await notify({ user_id: job.user_id, title: `Done: ${clip(job.task, 80)}`, body: clip(reply, 140), link: "#/chat", why: "You asked me to work on this in the background", importance: 2.5, text: `Done: ${clip(job.task, 80)}\n\n${plain(reply)}` });
       await logActivity({ user_id: job.user_id, kind: "job_done", title: `Finished background job: ${clip(job.task, 100)}`, why: "You handed it off in chat", ref_type: "job", ref_id: job.id });
       done++;
     } catch (e) {

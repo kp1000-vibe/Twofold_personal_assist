@@ -8,6 +8,9 @@ import reminders from "./routes/reminders.ts";
 import undo from "./routes/undo.ts";
 import jobs from "./routes/jobs.ts";
 import insights from "./routes/insights.ts";
+import phone from "./routes/phone.ts";
+import inboundTwilio from "./routes/inbound-twilio.ts";
+import inboundSendblue from "./routes/inbound-sendblue.ts";
 import { cors, json } from "./shared/util.ts";
 
 const routes: Record<string, (req: Request) => Promise<Response>> = {
@@ -20,6 +23,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   undo,
   jobs,
   insights,
+  phone,
+  "inbound-twilio": inboundTwilio,
+  "inbound-sendblue": inboundSendblue,
 };
 
 Deno.serve((req) => {

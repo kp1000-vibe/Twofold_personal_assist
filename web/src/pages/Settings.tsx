@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ago, ErrorBox, fn, Loading, must, Profile, supabase, useLoad } from "../lib";
 import { enablePush, isStandalone, pushEnabledHere, pushSupported } from "../push";
+import TextChannels from "./TextChannels";
 
 export default function Settings({ profile, onSaved, params }: { profile: Profile; onSaved: () => void; params: URLSearchParams }) {
   const [name, setName] = useState(profile.display_name ?? "");
@@ -70,6 +71,8 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
           <div className="notice">Gmail access is rolling out to the first 100 beta testers while Google reviews the app. You are on the list, and everything else works today.</div>
         )}
       </div>
+
+      <TextChannels profile={profile} />
 
       <div className="card">
         <h2>Notifications on this device</h2>

@@ -146,7 +146,7 @@ type Ctx = {
 
 /** Run one request through instinct then thinking. */
 export async function runAgent(profile: Profile, message: string, opts: {
-  purpose?: string; background?: boolean; forceAsk?: boolean; attachments?: Attachment[]; history?: { role: string; content: string }[];
+  purpose?: string; background?: boolean; forceAsk?: boolean; attachments?: Attachment[]; history?: { role: string; content: string }[]; channel?: string;
 } = {}): Promise<AgentResult> {
   const db = admin();
   const uid = profile.id;
@@ -226,6 +226,7 @@ export async function runAgent(profile: Profile, message: string, opts: {
     isDecision ? "The user stated a decision. Save it with save_decision including the reason, if they gave one." : "",
     longJob ? "This looks like a long job. Prefer work_in_background and tell the user you will notify them." : "",
     opts.background ? "You are running in the background. Be thorough, then write a complete, well organized result." : "",
+    opts.channel ? `The user is texting you over ${opts.channel === "imessage" ? "iMessage" : opts.channel === "whatsapp" ? "WhatsApp" : "SMS"}. Keep it short like a text from a friend: plain sentences, under 600 characters when you can, no headers, tables or bold. Drafts you create are shown to them in the thread and they can reply YES to approve, so do not repeat the full draft.` : "",
     "Rules:",
     "- Be warm, brief and concrete. Short paragraphs or a short list. No filler.",
     "- Emails, events and errands go through the user's trust rules. The tool result says whether it is waiting for approval, scheduled with an undo window, or blocked. Report exactly that; never claim something was sent or booked unless the tool said so.",
