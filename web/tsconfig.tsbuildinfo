@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/lib.tsx","./src/main.tsx","./src/pages/Admin.tsx","./src/pages/Approvals.tsx","./src/pages/Auth.tsx","./src/pages/Chat.tsx","./src/pages/Gate.tsx","./src/pages/Inbox.tsx","./src/pages/Landing.tsx","./src/pages/Memory.tsx","./src/pages/Money.tsx","./src/pages/Settings.tsx","./src/pages/Tasks.tsx","./src/pages/Today.tsx"],"version":"5.9.3"}
