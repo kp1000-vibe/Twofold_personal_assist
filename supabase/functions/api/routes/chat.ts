@@ -192,8 +192,9 @@ export default handle(async (req) => {
     else convo.push({ role: m.role, content: m.content });
   }
   while (convo.length && convo[0].role !== "user") convo.shift();
-  if (convo.length && convo[convo.length - 1].role === "user") convo[convo.length - 1].content += `\n\n${message}`;
-  else convo.push({ role: "user", content: message });
+  // drop earlier messages that never got a reply (a failed turn), so they do not hijack this one
+  while (convo.length && convo[convo.length - 1].role === "user") convo.pop();
+  convo.push({ role: "user", content: message });
 
   const ctx: Ctx = {
     profile,
