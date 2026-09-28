@@ -8,6 +8,7 @@ import { logActivity, queueAction } from "./trust.ts";
 import { indexText, searchKnowledge } from "./knowledge.ts";
 import { simulate } from "./finance.ts";
 import { runPremortem } from "./premortem.ts";
+import { budgetFor } from "./plan.ts";
 
 // ------------------------------------------------------------------ specialists
 export const SPECIALISTS: Record<string, { when: string; brief: string; tools: string[] }> = {
@@ -158,7 +159,7 @@ type Ctx = {
 
 /** Run one request through instinct then thinking. */
 export async function runAgent(profile: Profile, message: string, opts: {
-  purpose?: string; background?: boolean; forceAsk?: boolean; attachments?: Attachment[]; history?: { role: string; content: string }[]; channel?: string;
+  purpose?: string; background?: boolean; forceAsk?: boolean; attachments?: Attachment[]; history?: { role: string; content: string }[]; channel?: string; lite?: boolean;
 } = {}): Promise<AgentResult> {
   const db = admin();
   const uid = profile.id;
@@ -215,13 +216,14 @@ export async function runAgent(profile: Profile, message: string, opts: {
   let model: string = diff < (light ? 1.6 : 0.9) ? MODELS.haiku : diff < 2.3 ? MODELS.sonnet : MODELS.opus;
   if (model === MODELS.haiku && intents.some((i) => ["email", "errand", "money", "goals", "travel"].includes(i)) && diff >= 0.5) model = MODELS.sonnet;
   if (opts.background && model === MODELS.haiku) model = MODELS.sonnet;
+  if (opts.lite) model = MODELS.haiku; // over the monthly allowance: cheapest model, no web, no background
 
   const toolNames = new Set<string>(intents.flatMap((i) => SPECIALISTS[i]?.tools ?? []));
-  if (needsWeb) toolNames.add("web_search");
+  if (needsWeb && !opts.lite) toolNames.add("web_search");
   if (isCommitment) toolNames.add("create_task");
   if (isDecision) toolNames.add("save_decision");
   if (replayAnswer) toolNames.add("record_decision_outcome");
-  if (!opts.background && intent !== "chit_chat") toolNames.add("work_in_background");
+  if (!opts.background && !opts.lite && intent !== "chit_chat") toolNames.add("work_in_background");
   const tools: unknown[] = [];
   for (const t of toolNames) {
     if (t === "web_search") {
@@ -577,6 +579,9 @@ async function runTool(name: string, input: any, ctx: Ctx): Promise<string> {
       return JSON.stringify(data ?? []);
     }
     case "create_automation": {
+      const b = await budgetFor(ctx.profile);
+      const { count: have } = await db.from("automations").select("id", { count: "exact", head: true }).eq("user_id", uid).eq("enabled", true);
+      if ((have ?? 0) >= b.maxAutomations) return `Not saved: the ${b.name} plan allows ${b.maxAutomations} automations and they have ${have}. Tell them they can pause one on the Rules page or upgrade in Settings.`;
       const trigger = ["email", "daily", "weekly"].includes(input.trigger) ? input.trigger : "daily";
       const { data, error } = await db.from("automations").insert({
         user_id: uid, title: String(input.title).slice(0, 120), trigger, condition: input.condition ?? null,

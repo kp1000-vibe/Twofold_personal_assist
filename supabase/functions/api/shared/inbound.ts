@@ -3,6 +3,7 @@ import { admin, clip, Profile } from "./util.ts";
 import { Attachment, runAgent } from "./agent.ts";
 import { logActivity, performAction } from "./trust.ts";
 import { indexText } from "./knowledge.ts";
+import { blockedMessage, budgetFor, markActive } from "./plan.ts";
 import { Kind, plain, Provider, saveMedia, sendText, typing } from "./channels.ts";
 
 export type Inbound = {
@@ -46,6 +47,8 @@ export async function handleInbound(ev: Inbound) {
   const { data: profile } = await db.from("profiles").select("*").eq("id", ch.user_id).single();
   if (!profile?.beta_access) return reply(kind, "Your Twofold access is paused. Open the app to check your invite.");
 
+  await markActive(ch.user_id, "text");
+  const budget = await budgetFor(profile as Profile);
   const cmd = ev.text.trim().toUpperCase().replace(/[.!]+$/, "");
   if (cmd === "STOP" || cmd === "UNSUBSCRIBE") {
     await db.from("channels").update({ notify: false }).eq("id", ch.id);
@@ -92,7 +95,8 @@ export async function handleInbound(ev: Inbound) {
   const { count: today } = await db.from("messages").select("id", { count: "exact", head: true })
     .eq("user_id", ch.user_id).eq("role", "user").not("meta->>channel", "is", null)
     .gt("created_at", new Date(Date.now() - 86400_000).toISOString());
-  if ((today ?? 0) >= cap) return reply(kind, `You hit today's text limit. Keep going in the app: ${url}`);
+  if (budget.level === "blocked") return reply(kind, blockedMessage(budget, url));
+  if ((today ?? 0) >= Math.min(cap, budget.textDailyCap)) return reply(kind, `You hit today's text limit. Keep going in the app: ${url}`);
 
   await typing(ev.provider, ev.phone);
   const attachments: Attachment[] = [];
@@ -113,7 +117,7 @@ export async function handleInbound(ev: Inbound) {
   let answer: string;
   let meta: Record<string, any> = {};
   try {
-    const out = await runAgent(profile as Profile, text, { purpose: "text", channel: kind, attachments, history: past });
+    const out = await runAgent(profile as Profile, text, { purpose: "text", channel: kind, attachments, history: past, lite: budget.level === "lite" });
     answer = out.reply;
     meta = out.meta;
   } catch (e) {

@@ -18,6 +18,7 @@ import Rules from "./pages/Rules";
 import People from "./pages/People";
 import Goals from "./pages/Goals";
 import Decisions from "./pages/Decisions";
+import Privacy from "./pages/Privacy";
 
 const NAV = [
   { id: "chat", label: "Chat", icon: "chat" },
@@ -69,6 +70,8 @@ export default function App() {
     setProfile(data as Profile);
   };
   useEffect(() => { loadProfile(); }, [session?.user.id]);
+  // one ping per load counts this as an active day
+  useEffect(() => { if (profile?.beta_access) supabase.rpc("ping", { p_surface: "web" }).then(() => {}); }, [profile?.id, profile?.beta_access]);
 
   // live badge for approvals
   useEffect(() => {
@@ -84,6 +87,7 @@ export default function App() {
     return () => { supabase.removeChannel(ch); };
   }, [profile?.id, profile?.beta_access]);
 
+  if (route.page === "privacy") return <Privacy />;
   if (session === undefined) return <Loading />;
   if (recovery && session) return <Auth mode="reset" onDone={() => { setRecovery(false); go("chat"); }} />;
 

@@ -2,6 +2,7 @@
 import { admin, handle, HttpError, json, requireUser } from "../shared/util.ts";
 import { Attachment, runAgent } from "../shared/agent.ts";
 import { indexText } from "../shared/knowledge.ts";
+import { blockedMessage, budgetFor, markActive } from "../shared/plan.ts";
 
 export default handle(async (req) => {
   const profile = await requireUser(req);
@@ -26,7 +27,14 @@ export default handle(async (req) => {
     content: m.meta?.attachments?.length ? `${m.content}\n[attached: ${m.meta.attachments.map((x: any) => x.name).join(", ")}]` : m.content,
   }));
 
-  const { reply, meta } = await runAgent(profile, text, { purpose: "chat", attachments, history: past });
+  await markActive(uid, "chat");
+  const budget = await budgetFor(profile);
+  if (budget.level === "blocked") {
+    const { data: saved } = await db.from("messages").insert({ user_id: uid, role: "assistant", content: blockedMessage(budget), meta: { limit: true } }).select().single();
+    return json({ message: saved });
+  }
+  const { reply, meta } = await runAgent(profile, text, { purpose: "chat", attachments, history: past, lite: budget.level === "lite" });
+  if (budget.level === "lite") (meta as any).lite = true;
   const { data: saved } = await db.from("messages").insert({ user_id: uid, role: "assistant", content: reply, meta }).select().single();
 
   if (userMsg) await indexText(uid, "message", userMsg.id, `User said: ${text}`);

@@ -3,6 +3,7 @@ import { ago, ErrorBox, Loading, MODEL_NAMES, must, supabase, useLoad, usd } fro
 
 export default function Admin() {
   const m = useLoad(async () => must(await supabase.rpc("admin_metrics")) as any);
+  const g = useLoad(async () => must(await supabase.rpc("admin_growth")) as any);
   const wait = useLoad(async () => must(await supabase.from("waitlist").select("*").order("created_at", { ascending: false }).limit(300)) as any[]);
   const users = useLoad(async () => must(await supabase.rpc("admin_list_users")) as any[]);
   const [count, setCount] = useState(10);
@@ -44,7 +45,8 @@ export default function Admin() {
 
   return (
     <div>
-      <div className="page-head"><div><h1>Admin</h1><p>Beta health and unit economics, last 30 days.</p></div><button className="btn" onClick={() => { m.reload(); users.reload(); wait.reload(); }}>Refresh</button></div>
+      <div className="page-head"><div><h1>Admin</h1><p>Beta health and unit economics, last 30 days.</p></div><button className="btn" onClick={() => { m.reload(); g.reload(); users.reload(); wait.reload(); }}>Refresh</button></div>
+      {g.data && <Growth g={g.data} />}
       <ErrorBox msg={err ?? m.error} />
       {m.loading || !x ? <Loading /> : (
         <>
@@ -133,6 +135,38 @@ export default function Admin() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function Growth({ g }: { g: any }) {
+  const cohorts = (g.cohorts ?? []) as any[];
+  const done = cohorts.filter((c) => c.w4_complete);
+  const w4 = done.reduce((n, c) => n + c.w4, 0) / Math.max(1, done.reduce((n, c) => n + c.size, 0));
+  const reqs = Object.values(g.upgrade_requests ?? {}).reduce((n: number, v: any) => n + Number(v), 0) as number;
+  const costPerWau = g.wau > 0 ? Number(g.cost_7d) / g.wau : 0;
+  return (
+    <div className="card">
+      <h2>Growth</h2>
+      <p className="muted" style={{ marginTop: 0 }}>The quit your job test: about 1,000 weekly active, 40% or more still active in week 4, and people asking to pay.</p>
+      <div className="grid cols-4">
+        <Stat l="Weekly active" v={g.wau} s={`${g.dau} today · ${g.mau} in 30 days`} />
+        <Stat l="Stickiness" v={g.mau > 0 ? `${Math.round((g.wau / g.mau) * 100)}%` : "·"} s="weekly active divided by monthly active" />
+        <Stat l="Week 4 retention" v={done.length ? `${Math.round(w4 * 100)}%` : "too early"} s={done.length ? `${done.length} cohorts old enough` : "needs users older than 5 weeks"} />
+        <Stat l="Want to pay" v={reqs} s={`${Object.entries(g.upgrade_requests ?? {}).map(([k, v]) => `${k} ${v}`).join(" · ") || "no requests yet"}`} />
+        <Stat l="AI cost per weekly active" v={`${usd(costPerWau, 2)}/wk`} s={`${g.over_budget} users over their plan budget`} />
+        <Stat l="Where they show up" v={Object.keys(g.surfaces_7d ?? {}).length || "·"} s={Object.entries(g.surfaces_7d ?? {}).map(([k, v]) => `${k} ${v}`).join(" · ")} />
+      </div>
+      {cohorts.length > 0 && (
+        <div className="scroll-x" style={{ marginTop: 12 }}>
+          <table className="table">
+            <thead><tr><th>Signup week</th><th>Users</th><th>Active week 1</th><th>Active week 4</th></tr></thead>
+            <tbody>{cohorts.map((c) => (
+              <tr key={c.week}><td>{c.week}</td><td>{c.size}</td><td>{Math.round((c.w1 / c.size) * 100)}%</td><td>{c.w4_complete ? `${Math.round((c.w4 / c.size) * 100)}%` : "not yet"}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -77,7 +77,7 @@ export default function Landing() {
         <div className="card"><h3>Built to resist tricks</h3><p className="ink2">Every email is screened for hidden instructions aimed at AI before the assistant ever reads it, and email text is always treated as data.</p></div>
       </section>
 
-      <p className="muted" style={{ textAlign: "center", marginTop: 48 }}>Twofold · private beta</p>
+      <p className="muted" style={{ textAlign: "center", marginTop: 48 }}>Twofold · private beta · <a href="#/privacy">Privacy</a></p>
     </div>
   );
 }

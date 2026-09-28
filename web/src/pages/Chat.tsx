@@ -167,6 +167,7 @@ function Meta({ meta }: { meta: any }) {
       <div className="meta-line" title="How this answer was made">
         <span className="bolt">⚡</span>
         {meta.background && <span className="chip gold">background</span>}
+        {meta.lite && <span className="chip warn" title="Past this month's allowance: lighter model, no web search">lite mode</span>}
         {meta.channel && <span className="chip">via {meta.channel === "imessage" ? "iMessage" : meta.channel === "whatsapp" ? "WhatsApp" : "SMS"}</span>}
         <span>{meta.instinct === "jev" ? "Jev" : "instinct"} → {(meta.specialists ?? [meta.intent]).map((x: string) => INTENT_LABEL[x] ?? x).join(" + ")} in {meta.instinct_ms}ms</span>
         <span>·</span>

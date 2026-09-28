@@ -2,6 +2,7 @@
 import { plain } from "../shared/channels.ts";
 import { admin, clip, handle, HttpError, isCron, json, Profile } from "../shared/util.ts";
 import { runAgent } from "../shared/agent.ts";
+import { blockedMessage, budgetFor } from "../shared/plan.ts";
 import { logActivity, notify } from "../shared/trust.ts";
 import { indexText } from "../shared/knowledge.ts";
 
@@ -18,6 +19,8 @@ export default handle(async (req) => {
     if (!claimed) continue;
     const { data: profile } = await db.from("profiles").select("*").eq("id", job.user_id).single();
     try {
+      const budget = await budgetFor(profile as Profile);
+      if (budget.level !== "ok") throw new Error(blockedMessage(budget));
       const { reply, meta } = await runAgent(profile as Profile, job.task, { purpose: "background", background: true });
       await db.from("jobs").update({ status: "done", result: reply, finished_at: new Date().toISOString() }).eq("id", job.id);
       const { data: msg } = await db.from("messages").insert({ user_id: job.user_id, role: "assistant", content: `**Background job finished:** ${clip(job.task, 120)}\n\n${reply}`, meta: { ...meta, background: true, job_id: job.id } }).select("id").single();

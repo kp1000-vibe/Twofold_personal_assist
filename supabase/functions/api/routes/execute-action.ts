@@ -1,10 +1,12 @@
 // Approve or discard an item in the Approvals tab, or cancel a rule approved one inside its undo window.
 import { admin, handle, HttpError, json, requireUser } from "../shared/util.ts";
 import { logActivity, performAction } from "../shared/trust.ts";
+import { markActive } from "../shared/plan.ts";
 
 export default handle(async (req) => {
   const profile = await requireUser(req);
   const { action_id, decision, edits } = await req.json();
+  await markActive(profile.id, "approve");
   if (!action_id || !["approve", "reject"].includes(decision)) throw new HttpError(400, "Bad request");
   const db = admin();
   const { data: action } = await db.from("actions").select("*").eq("id", action_id).eq("user_id", profile.id).maybeSingle();
