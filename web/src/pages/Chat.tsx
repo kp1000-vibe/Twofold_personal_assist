@@ -8,8 +8,8 @@ const SUGGESTIONS = [
   "Can I afford a $1.2M house?",
   "I want to run a half marathon by spring",
   "Every Friday at 4pm, summarize my week",
-  "Find a good sushi place near me for Friday at 7",
-  "Always ask me before emailing anyone at work",
+  "Where could my week break?",
+  "I decided to lease an EV to save on gas",
 ];
 
 const INTENT_LABEL: Record<string, string> = {

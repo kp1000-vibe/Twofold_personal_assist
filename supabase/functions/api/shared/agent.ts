@@ -7,6 +7,7 @@ import { accessToken, calendarList, gmailGet, gmailList } from "./google.ts";
 import { logActivity, queueAction } from "./trust.ts";
 import { indexText, searchKnowledge } from "./knowledge.ts";
 import { simulate } from "./finance.ts";
+import { runPremortem } from "./premortem.ts";
 
 // ------------------------------------------------------------------ specialists
 export const SPECIALISTS: Record<string, { when: string; brief: string; tools: string[] }> = {
@@ -14,7 +15,7 @@ export const SPECIALISTS: Record<string, { when: string; brief: string; tools: s
   remember: {
     when: "The user shares a fact, preference or decision to keep, or asks what the assistant knows about them",
     brief: "You are the memory keeper. Save lasting facts with save_memory and decisions with save_decision (always with the reason).",
-    tools: ["save_memory", "save_decision", "search_knowledge"],
+    tools: ["save_memory", "save_decision", "search_knowledge", "list_decisions"],
   },
   people: {
     when: "About a specific person in the user's life: who they are, birthdays, history, promises, keeping in touch",
@@ -37,9 +38,9 @@ export const SPECIALISTS: Record<string, { when: string; brief: string; tools: s
     tools: ["search_email", "read_email", "draft_email", "create_task", "save_person"],
   },
   calendar: {
-    when: "Check the schedule, availability, upcoming meetings, or put something on the calendar",
-    brief: "You are the scheduler. Respect the user's scheduling preferences from memory. Check list_events before proposing times.",
-    tools: ["list_events", "propose_event", "create_task"],
+    when: "Check the schedule, availability, upcoming meetings, how the week looks or where it could go wrong, or put something on the calendar",
+    brief: "You are the scheduler. Respect the user's scheduling preferences from memory. Check list_events before proposing times. For how the week looks or where it could break, use week_check.",
+    tools: ["list_events", "propose_event", "create_task", "week_check"],
   },
   research: {
     when: "Look something up online: facts, news, explanations, comparisons",
@@ -79,12 +80,12 @@ export const SPECIALISTS: Record<string, { when: string; brief: string; tools: s
   recall: {
     when: "Find something from the past: what was said, decided, recommended or sent",
     brief: "You are the archivist. Search the knowledge vault first, then email. Quote what you found and when.",
-    tools: ["search_knowledge", "search_email", "list_people"],
+    tools: ["search_knowledge", "search_email", "list_people", "list_decisions"],
   },
   advice: {
     when: "Think through a decision or plan, or draft text that needs no tools",
-    brief: "You are a thoughtful advisor. Check past decisions for conflicts and point them out.",
-    tools: ["save_memory", "save_decision", "create_task", "simulate_finances"],
+    brief: "You are a thoughtful advisor. Check past decisions for conflicts and point them out. When a similar past decision has a recorded outcome, use it: what happened last time is the best evidence.",
+    tools: ["save_memory", "save_decision", "create_task", "simulate_finances", "list_decisions"],
   },
 };
 
@@ -93,7 +94,18 @@ const str = { type: "string" };
 
 const TOOL_DEFS: Record<string, unknown> = {
   save_memory: { name: "save_memory", description: "Remember a lasting fact or preference about the user. One short sentence.", input_schema: S({ content: str, kind: { type: "string", enum: ["fact", "preference"] } }, ["content"]) },
-  save_decision: { name: "save_decision", description: "Remember a decision the user made and why, so future advice can respect it.", input_schema: S({ decision: str, reason: str }, ["decision", "reason"]) },
+  save_decision: {
+    name: "save_decision",
+    description: "Remember a decision the user made and why, so future advice can respect it. Also note what they expect to happen if it works out and when it is fair to judge it; Twofold checks back on that date.",
+    input_schema: S({ decision: str, reason: str, expectation: { type: "string", description: "What should be true later if this was a good call, as concrete as possible" }, check_in_days: { type: "integer", description: "Days until it is fair to judge, 14 to 365. Default 90" } }, ["decision", "reason"]),
+  },
+  record_decision_outcome: {
+    name: "record_decision_outcome",
+    description: "Record how a past decision turned out, when the user tells you. verdict is worked, mixed or did_not. Use too_early to check again later.",
+    input_schema: S({ id: str, verdict: { type: "string", enum: ["worked", "mixed", "did_not", "too_early"] }, outcome: { type: "string", description: "What actually happened, in the user's words" } }, ["id", "verdict"]),
+  },
+  week_check: { name: "week_check", description: "Run a pre mortem on the user's coming week (the rest of this week, or next week on weekends): measures meetings, conflicts, free time, deadlines, promises, birthdays and bills, then returns where it could break with fixes. May draft focus blocks for approval.", input_schema: S({}) },
+  list_decisions: { name: "list_decisions", description: "List the user's past decisions with reasons, expectations, check dates and how they turned out.", input_schema: S({}) },
   save_person: { name: "save_person", description: "Create or update a person in the user's life. Merges with an existing person of the same name. birthday as YYYY-MM-DD or MM-DD.", input_schema: S({ name: str, relation: str, email: str, birthday: str, note: str }, ["name"]) },
   list_people: { name: "list_people", description: "List people the user knows, with relation, birthday, last contact and notes. Optional name filter.", input_schema: S({ query: str }) },
   search_knowledge: { name: "search_knowledge", description: "Search everything the user shared before: past chats, memories, decisions, and emails.", input_schema: S({ query: str }, ["query"]) },
@@ -153,10 +165,13 @@ export async function runAgent(profile: Profile, message: string, opts: {
   const attachments = opts.attachments ?? [];
   const past = opts.history ?? [];
 
-  const [{ data: memories }, { data: gacct }] = await Promise.all([
-    db.from("memories").select("id, content, kind, reason").eq("user_id", uid).order("created_at", { ascending: false }).limit(40),
+  const [{ data: memories }, { data: gacct }, { data: replays }] = await Promise.all([
+    db.from("memories").select("id, content, kind, reason, verdict, outcome").eq("user_id", uid).order("created_at", { ascending: false }).limit(40),
     db.from("google_accounts").select("user_id").eq("user_id", uid).maybeSingle(),
+    db.from("memories").select("id, content, reason, expectation, replay_note").eq("user_id", uid).eq("kind", "decision")
+      .is("checked_at", null).gt("replay_asked_at", new Date(Date.now() - 14 * 864e5).toISOString()).limit(3),
   ]);
+  const openReplays = replays ?? [];
   const mems = memories ?? [];
 
   // ------------------------------------------------------------ instinct
@@ -170,6 +185,9 @@ export async function runAgent(profile: Profile, message: string, opts: {
     decision: { type: "noul", instructions: "Does `message` state a decision the user has made about their life, money, family or work?" },
     long_job: { type: "noul", instructions: "Would doing `message` well take many minutes of research or many steps, so it is better done in the background?" },
   };
+  if (openReplays.length) {
+    questions.replay_answer = { type: "noul", instructions: "Is `message` the user telling how one of `open_decision_checks` turned out (worked, mixed, did not work, or too early to say)?" };
+  }
   mems.forEach((m, i) => {
     questions[`mem_${i}`] = { type: "noul", instructions: { memory: m.reason ? `${m.content} (because ${m.reason})` : m.content, question: "Would knowing `memory` help respond well to the user's `message`?" } };
   });
@@ -177,6 +195,7 @@ export async function runAgent(profile: Profile, message: string, opts: {
     message: clip(message, 6000),
     attachments: attachments.map((a) => a.name),
     recent_conversation: past.slice(-4).map((m) => `${m.role}: ${clip(m.content, 300)}`),
+    ...(openReplays.length ? { open_decision_checks: openReplays.map((d) => d.content) } : {}),
   };
   const instinct = await jev(uid, "chat_instinct", state, questions);
   const a: Answers = instinct.answers;
@@ -189,6 +208,7 @@ export async function runAgent(profile: Profile, message: string, opts: {
   const isCommitment = noul(a, "commitment") > 0.8;
   const isDecision = noul(a, "decision") > 0.8;
   const longJob = !opts.background && noul(a, "long_job") > 0.85;
+  const replayAnswer = openReplays.length > 0 && noul(a, "replay_answer") > 0.6;
 
   const diff = score(a, "difficulty")?.score ?? 1;
   const light = intents.every((i) => ["chit_chat", "remember", "tasks", "research", "automation", "recall", "people"].includes(i));
@@ -200,6 +220,7 @@ export async function runAgent(profile: Profile, message: string, opts: {
   if (needsWeb) toolNames.add("web_search");
   if (isCommitment) toolNames.add("create_task");
   if (isDecision) toolNames.add("save_decision");
+  if (replayAnswer) toolNames.add("record_decision_outcome");
   if (!opts.background && intent !== "chit_chat") toolNames.add("work_in_background");
   const tools: unknown[] = [];
   for (const t of toolNames) {
@@ -221,9 +242,10 @@ export async function runAgent(profile: Profile, message: string, opts: {
     ...briefs,
     `Right now it is ${now.pretty} (${now.iso}) in their timezone ${profile.timezone}. Write datetimes for tools as ISO 8601 with offset ${now.offset} unless another timezone is clearly meant.`,
     gacct ? "Their Google account (Gmail and Calendar) is connected." : "Their Google account is NOT connected. For email or calendar, tell them to connect Google in Settings.",
-    picked.length ? `What you know about them:\n${picked.map((m) => `- ${m.kind === "decision" ? "Decision: " : ""}${m.content}${m.reason ? ` (because ${m.reason})` : ""}`).join("\n")}` : "",
+    picked.length ? `What you know about them:\n${picked.map((m) => `- ${m.kind === "decision" ? "Decision: " : ""}${m.content}${m.reason ? ` (because ${m.reason})` : ""}${m.verdict ? ` [turned out: ${m.verdict}${m.outcome ? `, ${clip(m.outcome, 120)}` : ""}]` : ""}`).join("\n")}` : "",
     isCommitment ? "The user just made a promise or noted something to do. Save it with create_task (kind commitment if it is owed to someone), with a due date if one is implied." : "",
-    isDecision ? "The user stated a decision. Save it with save_decision including the reason, if they gave one." : "",
+    isDecision ? "The user stated a decision. Save it with save_decision including the reason, and ask yourself what would be true later if it works out (expectation) and when it is fair to judge (check_in_days)." : "",
+    replayAnswer ? `Twofold recently asked the user how these past decisions turned out:\n${openReplays.map((d) => `- id ${d.id}: ${d.content}${d.reason ? ` (because ${d.reason})` : ""}${d.expectation ? `. They expected: ${d.expectation}` : ""}`).join("\n")}\nThe message looks like an answer. Record it with record_decision_outcome, then reply briefly.` : "",
     longJob ? "This looks like a long job. Prefer work_in_background and tell the user you will notify them." : "",
     opts.background ? "You are running in the background. Be thorough, then write a complete, well organized result." : "",
     opts.channel ? `The user is texting you over ${opts.channel === "imessage" ? "iMessage" : opts.channel === "whatsapp" ? "WhatsApp" : "SMS"}. Keep it short like a text from a friend: plain sentences, under 600 characters when you can, no headers, tables or bold. Drafts you create are shown to them in the thread and they can reply YES to approve, so do not repeat the full draft.` : "",
@@ -357,12 +379,39 @@ async function runTool(name: string, input: any, ctx: Ctx): Promise<string> {
       const content = String(input.decision ?? "").slice(0, 500);
       const reason = String(input.reason ?? "").slice(0, 500) || null;
       if (!content) return "Nothing to save";
-      const { data } = await db.from("memories").insert({ user_id: uid, content, reason, kind: "decision", source: ctx.source }).select("id").single();
+      const expectation = String(input.expectation ?? "").slice(0, 500) || null;
+      const days = Math.min(365, Math.max(14, Math.round(Number(input.check_in_days) || 90)));
+      const checkAfter = new Date(Date.now() + days * 864e5).toISOString();
+      const { data } = await db.from("memories").insert({ user_id: uid, content, reason, expectation, check_after: checkAfter, kind: "decision", source: ctx.source }).select("id").single();
       if (data) {
         await logActivity({ user_id: uid, kind: "decision_saved", title: `Noted decision: ${content}`, why: reason ? `Reason given: ${reason}` : `Because ${via}`, ref_type: "memory", ref_id: data.id, undo: { type: "delete_memory", id: data.id } });
         await indexText(uid, "decision", data.id, `Decision: ${content}${reason ? `. Reason: ${reason}` : ""}`);
       }
-      return "Decision saved with its reason";
+      return `Decision saved with its reason. Twofold will check back in ${days} days (${checkAfter.slice(0, 10)}) to see if it worked out. Mention that briefly.`;
+    }
+    case "record_decision_outcome": {
+      const { data: d } = await db.from("memories").select("id, content").eq("id", String(input.id ?? "")).eq("user_id", uid).eq("kind", "decision").maybeSingle();
+      if (!d) return "No decision with that id";
+      const outcome = String(input.outcome ?? "").slice(0, 1000) || null;
+      if (input.verdict === "too_early") {
+        await db.from("memories").update({ check_after: new Date(Date.now() + 60 * 864e5).toISOString(), replay_asked_at: null, outcome }).eq("id", d.id);
+        return "Noted. Will check again in about 2 months.";
+      }
+      if (!["worked", "mixed", "did_not"].includes(input.verdict)) return "verdict must be worked, mixed, did_not or too_early";
+      await db.from("memories").update({ verdict: input.verdict, outcome, checked_at: new Date().toISOString() }).eq("id", d.id);
+      await logActivity({ user_id: uid, kind: "decision_reviewed", title: `Reviewed decision: ${d.content}`, why: `You said it ${input.verdict === "did_not" ? "did not work out" : input.verdict === "mixed" ? "was mixed" : "worked"}${outcome ? `: ${clip(outcome, 160)}` : ""}`, ref_type: "memory", ref_id: d.id });
+      await indexText(uid, "decision", d.id, `Decision: ${d.content}. Outcome (${input.verdict}): ${outcome ?? ""}`);
+      const { data: all } = await db.from("memories").select("verdict").eq("user_id", uid).eq("kind", "decision").not("verdict", "is", null);
+      const worked = (all ?? []).filter((x) => x.verdict === "worked").length;
+      return `Recorded. Their track record is now ${worked} of ${all?.length ?? 0} reviewed decisions that worked. Say one warm, honest line about what this teaches, no lecture.`;
+    }
+    case "week_check": {
+      const r = await runPremortem(ctx.profile, { manual: true });
+      return `${r.content}\n\n(Measured ${r.stats.checks ?? 0} things; ${r.stats.meeting_hours ?? 0}h meetings, ${r.stats.free_hours ?? 0}h open. Also shown on the Today page.)`;
+    }
+    case "list_decisions": {
+      const { data } = await db.from("memories").select("id, content, reason, expectation, check_after, verdict, outcome, created_at").eq("user_id", uid).eq("kind", "decision").order("created_at", { ascending: false }).limit(30);
+      return JSON.stringify(data ?? []);
     }
     case "save_person": {
       const nm = String(input.name ?? "").trim().slice(0, 120);

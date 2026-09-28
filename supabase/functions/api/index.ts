@@ -9,6 +9,7 @@ import undo from "./routes/undo.ts";
 import jobs from "./routes/jobs.ts";
 import insights from "./routes/insights.ts";
 import phone from "./routes/phone.ts";
+import reflect from "./routes/reflect.ts";
 import inboundTwilio from "./routes/inbound-twilio.ts";
 import inboundSendblue from "./routes/inbound-sendblue.ts";
 import { cors, json } from "./shared/util.ts";
@@ -24,6 +25,7 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   jobs,
   insights,
   phone,
+  reflect,
   "inbound-twilio": inboundTwilio,
   "inbound-sendblue": inboundSendblue,
 };

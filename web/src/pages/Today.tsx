@@ -1,4 +1,5 @@
 import { useState } from "react";
+import WeekCheck from "./WeekCheck";
 import { ago, Empty, ErrorBox, fn, Loading, Markdown, must, Profile, supabase, useLoad } from "../lib";
 
 export default function Today({ profile }: { profile: Profile }) {
@@ -50,6 +51,8 @@ export default function Today({ profile }: { profile: Profile }) {
         <a className="card stat" href="#/approvals" style={{ textDecoration: "none" }}><div className="l">Waiting for your OK</div><div className="v">{counts.data?.approvals ?? "·"}</div></a>
         <a className="card stat" href="#/tasks" style={{ textDecoration: "none" }}><div className="l">Open tasks</div><div className="v">{counts.data?.tasks ?? "·"}</div></a>
       </div>
+
+      <WeekCheck />
 
       <div className="card">
         {brief.loading ? <Loading /> : b ? (

@@ -13,6 +13,7 @@ export type Profile = {
   id: string; email: string | null; display_name: string | null; timezone: string; brief_hour: number;
   remind_by_email: boolean; beta_access: boolean; is_admin: boolean; google_slot: boolean;
   interrupt_level: "quiet" | "balanced" | "chatty";
+  premortem_enabled?: boolean;
 };
 
 /** Call an edge function and surface its error message. */
@@ -164,6 +165,7 @@ const P: Record<string, string> = {
   people: "M9 11a4 4 0 100-8 4 4 0 000 8zM2 21v-1a6 6 0 0112 0v1M16 3.5a4 4 0 010 7.5M22 21v-1a6 6 0 00-4-5.6",
   activity: "M3 12h4l3 8 4-16 3 8h4",
   rules: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7zM9 12h6M12 9v6",
+  decisions: "M4 12a8 8 0 1014-5.3M18 3v4h-4M12 8v4l3 2",
 };
 export function Icon({ name }: { name: string }) {
   return (

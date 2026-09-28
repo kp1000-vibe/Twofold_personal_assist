@@ -17,6 +17,7 @@ import Activity from "./pages/Activity";
 import Rules from "./pages/Rules";
 import People from "./pages/People";
 import Goals from "./pages/Goals";
+import Decisions from "./pages/Decisions";
 
 const NAV = [
   { id: "chat", label: "Chat", icon: "chat" },
@@ -25,6 +26,7 @@ const NAV = [
   { id: "tasks", label: "Tasks", icon: "tasks" },
   { id: "goals", label: "Goals", icon: "goals" },
   { id: "people", label: "People", icon: "people" },
+  { id: "decisions", label: "Decisions", icon: "decisions" },
   { id: "inbox", label: "Inbox", icon: "inbox" },
   { id: "money", label: "Money", icon: "money" },
   { id: "memory", label: "Memory", icon: "memory" },
@@ -104,6 +106,7 @@ export default function App() {
       case "money": return <Money />;
       case "goals": return <Goals profile={profile} />;
       case "people": return <People profile={profile} />;
+      case "decisions": return <Decisions params={route.params} />;
       case "activity": return <Activity />;
       case "rules": return <Rules />;
       case "memory": return <Memory />;

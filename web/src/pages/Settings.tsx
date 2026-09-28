@@ -9,6 +9,7 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
   const [hour, setHour] = useState(profile.brief_hour);
   const [remindEmail, setRemindEmail] = useState(profile.remind_by_email);
   const [level, setLevel] = useState(profile.interrupt_level ?? "balanced");
+  const [weekCheck, setWeekCheck] = useState(profile.premortem_enabled !== false);
   const pushOn = useLoad(pushEnabledHere);
   const [pushMsg, setPushMsg] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -22,7 +23,7 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    const { error } = await supabase.from("profiles").update({ display_name: name.trim() || null, timezone: tz, brief_hour: hour, remind_by_email: remindEmail, interrupt_level: level }).eq("id", profile.id);
+    const { error } = await supabase.from("profiles").update({ display_name: name.trim() || null, timezone: tz, brief_hour: hour, remind_by_email: remindEmail, interrupt_level: level, premortem_enabled: weekCheck }).eq("id", profile.id);
     if (error) return setErr(error.message);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -106,6 +107,10 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
             <option value="chatty">Chatty: tell me most things</option>
           </select>
         </label>
+        <label className="row" style={{ marginBottom: 10 }}>
+          <input type="checkbox" checked={weekCheck} onChange={(e) => setWeekCheck(e.target.checked)} />
+          <span>Sunday week check at 6 pm: tell me where next week could break</span>
+        </label>
         <label className="row" style={{ marginBottom: 14 }}>
           <input type="checkbox" checked={remindEmail} onChange={(e) => setRemindEmail(e.target.checked)} />
           <span>Also email me my reminders (to my connected Gmail)</span>
@@ -120,6 +125,7 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
           <a className="btn" href="#/money">Money</a>
           <a className="btn" href="#/memory">Memory</a>
           <a className="btn" href="#/goals">Goals</a>
+          <a className="btn" href="#/decisions">Decisions</a>
           <a className="btn" href="#/people">People</a>
           <a className="btn" href="#/activity">Activity</a>
           <a className="btn" href="#/rules">Rules</a>

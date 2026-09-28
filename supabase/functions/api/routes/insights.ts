@@ -4,10 +4,14 @@ import { admin, clip, handle, HttpError, isCron, json, localNow, Profile } from 
 import { claudeJson, jev, MODELS, score } from "../shared/ai.ts";
 import { logActivity, notify } from "../shared/trust.ts";
 import { runAutomation } from "../shared/automations.ts";
+import { runPremortem } from "../shared/premortem.ts";
+import { runDecisionReplay } from "../shared/replay.ts";
 
 const SCAN_HOUR = 16;      // afternoon scan, local time
 const RADAR_DAY = 0;       // Sunday
 const RADAR_HOUR = 17;
+const PREMORTEM_HOUR = 18; // Sunday evening, local time
+const REPLAY_HOUR = 11;    // late morning, a calm moment to reflect
 
 type Signal = { key: string; title: string; body: string; why: string; link: string };
 
@@ -15,7 +19,7 @@ export default handle(async (req) => {
   if (!(await isCron(req))) throw new HttpError(401, "Scheduled job only");
   const db = admin();
   const { data: users } = await db.from("profiles").select("*").eq("beta_access", true);
-  let autos = 0, scans = 0, radars = 0;
+  let autos = 0, scans = 0, radars = 0, premortems = 0, replays = 0;
   for (const u of (users ?? []) as Profile[]) {
     const now = localNow(u.timezone);
     const weekday = new Date(`${now.date}T12:00:00Z`).getUTCDay();
@@ -29,11 +33,16 @@ export default handle(async (req) => {
       }
       if (now.hour === SCAN_HOUR) { await dailyScan(u, now.date); scans++; }
       if (now.hour === RADAR_HOUR && weekday === RADAR_DAY) { await frictionRadar(u); radars++; }
+      if (now.hour === PREMORTEM_HOUR && weekday === RADAR_DAY && (u as any).premortem_enabled !== false) {
+        const { data: done } = await db.from("premortems").select("id").eq("user_id", u.id).gt("created_at", new Date(Date.now() - 12 * 3600_000).toISOString()).limit(1);
+        if (!done?.length) { await runPremortem(u); premortems++; }
+      }
+      if (now.hour === REPLAY_HOUR && (await runDecisionReplay(u))) replays++;
     } catch (e) {
       console.error("insights", u.id, e);
     }
   }
-  return json({ users: users?.length ?? 0, autos, scans, radars });
+  return json({ users: users?.length ?? 0, autos, scans, radars, premortems, replays });
 });
 
 async function alreadySaid(uid: string, key: string) {
