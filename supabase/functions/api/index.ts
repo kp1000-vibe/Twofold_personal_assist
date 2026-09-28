@@ -5,6 +5,9 @@ import syncInbox from "./routes/sync-inbox.ts";
 import dailyBrief from "./routes/daily-brief.ts";
 import executeAction from "./routes/execute-action.ts";
 import reminders from "./routes/reminders.ts";
+import undo from "./routes/undo.ts";
+import jobs from "./routes/jobs.ts";
+import insights from "./routes/insights.ts";
 import { cors, json } from "./shared/util.ts";
 
 const routes: Record<string, (req: Request) => Promise<Response>> = {
@@ -14,6 +17,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   "daily-brief": dailyBrief,
   "execute-action": executeAction,
   reminders,
+  undo,
+  jobs,
+  insights,
 };
 
 Deno.serve((req) => {

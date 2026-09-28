@@ -5,16 +5,19 @@ type Msg = { id: string; role: "user" | "assistant"; content: string; meta: any;
 
 const SUGGESTIONS = [
   "What needs my attention today?",
-  "Remind me to call Mom on Sunday at 5pm",
+  "Can I afford a $1.2M house?",
+  "I want to run a half marathon by spring",
+  "Every Friday at 4pm, summarize my week",
   "Find a good sushi place near me for Friday at 7",
-  "Which subscriptions am I paying for?",
-  "Who have I not heard back from this week?",
+  "Always ask me before emailing anyone at work",
 ];
 
 const INTENT_LABEL: Record<string, string> = {
-  chit_chat: "chat", remember: "memory", tasks: "tasks", email: "email", calendar: "calendar",
-  research: "research", money: "money", errand: "errand", advice: "thinking",
+  chit_chat: "chat", remember: "memory", people: "people", tasks: "tasks", goals: "goals", email: "email", calendar: "calendar",
+  research: "research", shopping: "shopping", travel: "travel", money: "finance", errand: "concierge", career: "career",
+  automation: "automation", recall: "recall", advice: "thinking",
 };
+const MAX_FILE = 20 * 1024 * 1024;
 
 export default function Chat({ profile, prefill }: { profile: Profile; prefill?: string }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -22,6 +25,8 @@ export default function Chat({ profile, prefill }: { profile: Profile; prefill?:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
@@ -32,23 +37,49 @@ export default function Chat({ profile, prefill }: { profile: Profile; prefill?:
     });
   }, []);
   useEffect(() => { if (prefill) setText(prefill); }, [prefill]);
+  // background job results arrive as new assistant messages
+  useEffect(() => {
+    const ch = supabase.channel("chat-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `user_id=eq.${profile.id}` }, (p: any) => {
+        const m = p.new as Msg;
+        if (m.role === "assistant" && m.meta?.background) setMsgs((cur) => (cur.some((x) => x.id === m.id) ? cur : [...cur, m]));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [profile.id]);
   useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [msgs, busy]);
   useEffect(() => {
     const el = boxRef.current;
     if (el) { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 160)}px`; }
   }, [text]);
 
+  const pick = (list: FileList | null) => {
+    if (!list) return;
+    const ok = Array.from(list).filter((f) => (f.type.startsWith("image/") || f.type === "application/pdf") && f.size <= MAX_FILE);
+    if (ok.length < list.length) setErr("Only images and PDFs up to 20 MB can be attached.");
+    setFiles((cur) => [...cur, ...ok].slice(0, 5));
+  };
+
   const send = async (t = text) => {
     const message = t.trim();
-    if (!message || busy) return;
+    if ((!message && !files.length) || busy) return;
     setErr(null);
     setText("");
+    const sending = files;
+    setFiles([]);
     if (window.location.hash.includes("?q=")) history.replaceState(null, "", "#/chat");
-    const temp: Msg = { id: `tmp${Date.now()}`, role: "user", content: message, meta: {}, created_at: new Date().toISOString() };
+    const temp: Msg = { id: `tmp${Date.now()}`, role: "user", content: message || "Please look at the attached file.", meta: { attachments: sending.map((f) => ({ name: f.name, mime: f.type })) }, created_at: new Date().toISOString() };
     setMsgs((m) => [...m, temp]);
     setBusy(true);
     try {
-      const { message: reply } = await fn<{ message: Msg }>("chat", { message });
+      const attachments = [];
+      for (const f of sending) {
+        const path = `${profile.id}/${crypto.randomUUID()}-${f.name.replace(/[^\w.]+/g, "_").slice(-80)}`;
+        const { error } = await supabase.storage.from("uploads").upload(path, f, { contentType: f.type });
+        if (error) throw new Error(`Upload failed: ${error.message}`);
+        attachments.push({ path, name: f.name, mime: f.type });
+      }
+      const { message: reply } = await fn<{ message: Msg }>("chat", { message, attachments });
       setMsgs((m) => [...m, reply]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -85,6 +116,11 @@ export default function Chat({ profile, prefill }: { profile: Profile; prefill?:
         {msgs.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
             <div className="bubble">
+              {m.meta?.attachments?.length > 0 && (
+                <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+                  {m.meta.attachments.map((a: any, i: number) => <span key={i} className="chip">{a.mime === "application/pdf" ? "📄" : "🖼"} {a.name}</span>)}
+                </div>
+              )}
               {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
               {m.role === "assistant" && <Meta meta={m.meta} />}
             </div>
@@ -96,12 +132,19 @@ export default function Chat({ profile, prefill }: { profile: Profile; prefill?:
         <ErrorBox msg={err} />
       </div>
 
+      {files.length > 0 && (
+        <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>
+          {files.map((f, i) => <span key={i} className="chip">{f.name} <button type="button" className="btn ghost sm" style={{ padding: "0 4px" }} onClick={() => setFiles(files.filter((_, j) => j !== i))}>×</button></span>)}
+        </div>
+      )}
       <form className="composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
+        <button type="button" className="btn ghost" title="Attach a photo or PDF" onClick={() => fileRef.current?.click()}>📎</button>
         <textarea
           ref={boxRef} rows={1} value={text} placeholder="Message Twofold" onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
         />
-        <button className="btn primary" disabled={busy || !text.trim()}>Send</button>
+        <button className="btn primary" disabled={busy || (!text.trim() && !files.length)}>Send</button>
       </form>
     </div>
   );
@@ -123,7 +166,8 @@ function Meta({ meta }: { meta: any }) {
       )}
       <div className="meta-line" title="How this answer was made">
         <span className="bolt">⚡</span>
-        <span>{meta.instinct === "jev" ? "Jev" : "instinct"} → {INTENT_LABEL[meta.intent] ?? meta.intent} in {meta.instinct_ms}ms</span>
+        {meta.background && <span className="chip gold">background</span>}
+        <span>{meta.instinct === "jev" ? "Jev" : "instinct"} → {(meta.specialists ?? [meta.intent]).map((x: string) => INTENT_LABEL[x] ?? x).join(" + ")} in {meta.instinct_ms}ms</span>
         <span>·</span>
         <span>{MODEL_NAMES[meta.model] ?? meta.model}</span>
         {meta.memories_used > 0 && <><span>·</span><span>{meta.memories_used} memories</span></>}

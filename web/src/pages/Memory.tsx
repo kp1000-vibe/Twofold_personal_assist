@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ago, Empty, Loading, must, supabase, useLoad } from "../lib";
 
-type Mem = { id: string; content: string; category: string; source: string; created_at: string; last_used_at: string | null };
+type Mem = { id: string; content: string; category: string; kind: string; reason: string | null; source: string; created_at: string; last_used_at: string | null };
 
 export default function Memory() {
   const mems = useLoad(async () => must(await supabase.from("memories").select("*").order("created_at", { ascending: false })) as Mem[]);
@@ -33,8 +33,9 @@ export default function Memory() {
         ) : (mems.data ?? []).map((m) => (
           <div key={m.id} className="item">
             <div className="grow">
-              <div>{m.content}</div>
-              <div className="sub">{m.category} · added {ago(m.created_at)}{m.last_used_at ? ` · last used ${ago(m.last_used_at)}` : ""}</div>
+              <div>{m.kind === "decision" && <span className="chip gold" style={{ marginRight: 6 }}>decision</span>}{m.content}</div>
+              {m.reason && <div className="sub">Why: {m.reason}</div>}
+              <div className="sub">{m.kind} · added {ago(m.created_at)}{m.last_used_at ? ` · last used ${ago(m.last_used_at)}` : ""}</div>
             </div>
             <button className="btn ghost sm danger" onClick={() => remove(m)}>Forget</button>
           </div>

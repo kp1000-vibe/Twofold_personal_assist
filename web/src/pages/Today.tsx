@@ -6,7 +6,7 @@ export default function Today({ profile }: { profile: Profile }) {
   const notes = useLoad(async () => must(await supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(30)));
   const counts = useLoad(async () => {
     const [a, t] = await Promise.all([
-      supabase.from("actions").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      supabase.from("actions").select("id", { count: "exact", head: true }).in("status", ["pending", "scheduled"]),
       supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "open"),
     ]);
     return { approvals: a.count ?? 0, tasks: t.count ?? 0 };
@@ -33,7 +33,9 @@ export default function Today({ profile }: { profile: Profile }) {
   };
 
   const b = brief.data as any;
-  const list = (notes.data ?? []) as any[];
+  const all = (notes.data ?? []) as any[];
+  const list = all.filter((n) => !n.quiet);
+  const quietList = all.filter((n) => n.quiet);
   const unread = list.filter((n) => !n.read).length;
 
   return (
@@ -66,11 +68,24 @@ export default function Today({ profile }: { profile: Profile }) {
         {list.length === 0 ? <Empty title="All quiet" /> : list.map((n) => (
           <a key={n.id} className="item" href={n.link ?? "#/today"} style={{ textDecoration: "none", opacity: n.read ? 0.6 : 1 }}>
             <span className="dot" style={{ background: n.read ? "var(--line)" : "var(--gold)", marginTop: 8 }} />
-            <div className="grow"><div className="title">{n.title}</div>{n.body && <div className="sub">{n.body}</div>}</div>
+            <div className="grow"><div className="title">{n.title}</div>{n.body && <div className="sub">{n.body}</div>}{n.why && <div className="sub" style={{ color: "var(--ink-2)" }}>Why now: {n.why}</div>}</div>
             <small>{ago(n.created_at)}</small>
           </a>
         ))}
       </div>
+      {quietList.length > 0 && (
+        <details style={{ marginTop: 16 }}>
+          <summary className="muted">Quietly noted ({quietList.length}), not worth a buzz</summary>
+          <div className="card" style={{ padding: "4px 14px", marginTop: 8 }}>
+            {quietList.map((n) => (
+              <a key={n.id} className="item" href={n.link ?? "#/today"} style={{ textDecoration: "none" }}>
+                <div className="grow"><div className="title">{n.title}</div>{n.why && <div className="sub">Why: {n.why}</div>}</div>
+                <small>{ago(n.created_at)}</small>
+              </a>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

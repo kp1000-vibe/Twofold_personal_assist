@@ -13,15 +13,23 @@ import Money from "./pages/Money";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
+import Activity from "./pages/Activity";
+import Rules from "./pages/Rules";
+import People from "./pages/People";
+import Goals from "./pages/Goals";
 
 const NAV = [
   { id: "chat", label: "Chat", icon: "chat" },
   { id: "today", label: "Today", icon: "today" },
   { id: "approvals", label: "Approvals", icon: "approvals" },
   { id: "tasks", label: "Tasks", icon: "tasks" },
+  { id: "goals", label: "Goals", icon: "goals" },
+  { id: "people", label: "People", icon: "people" },
   { id: "inbox", label: "Inbox", icon: "inbox" },
   { id: "money", label: "Money", icon: "money" },
   { id: "memory", label: "Memory", icon: "memory" },
+  { id: "activity", label: "Activity", icon: "activity" },
+  { id: "rules", label: "Rules", icon: "rules" },
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 
@@ -64,7 +72,7 @@ export default function App() {
   useEffect(() => {
     if (!profile?.beta_access) return;
     const count = async () => {
-      const { count } = await supabase.from("actions").select("id", { count: "exact", head: true }).eq("status", "pending");
+      const { count } = await supabase.from("actions").select("id", { count: "exact", head: true }).in("status", ["pending", "scheduled"]);
       setPending(count ?? 0);
     };
     count();
@@ -94,6 +102,10 @@ export default function App() {
       case "tasks": return <Tasks profile={profile} />;
       case "inbox": return <Inbox profile={profile} />;
       case "money": return <Money />;
+      case "goals": return <Goals profile={profile} />;
+      case "people": return <People profile={profile} />;
+      case "activity": return <Activity />;
+      case "rules": return <Rules />;
       case "memory": return <Memory />;
       case "settings": return <Settings profile={profile} onSaved={loadProfile} params={route.params} />;
       case "admin": return profile.is_admin ? <Admin /> : <Chat profile={profile} />;

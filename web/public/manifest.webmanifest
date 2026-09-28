@@ -1,0 +1,14 @@
+{
+  "name": "Twofold",
+  "short_name": "Twofold",
+  "description": "Your assistant with instincts",
+  "start_url": "/#/today",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#1f2a44",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

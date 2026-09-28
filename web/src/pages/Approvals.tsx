@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { ago, Empty, fn, Loading, must, Profile, supabase, useLoad, when } from "../lib";
 
-type Action = { id: string; kind: string; title: string; summary: string | null; payload: any; status: string; source: string; created_at: string; result: any };
+type Action = { id: string; kind: string; title: string; summary: string | null; payload: any; status: string; source: string; created_at: string; result: any; why: string | null; execute_after: string | null };
 
 export default function Approvals({ profile }: { profile: Profile }) {
-  const pending = useLoad(async () => must(await supabase.from("actions").select("*").eq("status", "pending").order("created_at", { ascending: false })) as Action[]);
-  const past = useLoad(async () => must(await supabase.from("actions").select("*").neq("status", "pending").order("decided_at", { ascending: false }).limit(15)) as Action[]);
+  const pending = useLoad(async () => must(await supabase.from("actions").select("*").in("status", ["pending", "scheduled"]).order("created_at", { ascending: false })) as Action[]);
+  const past = useLoad(async () => must(await supabase.from("actions").select("*").not("status", "in", "(pending,scheduled)").order("decided_at", { ascending: false }).limit(15)) as Action[]);
   const reload = () => { pending.reload(); past.reload(); };
 
   return (
@@ -68,6 +68,12 @@ function ActionCard({ a, tz, onDone }: { a: Action; tz: string; onDone: () => vo
         <small>{a.source === "email" ? "from your inbox · " : ""}{ago(a.created_at)}</small>
       </div>
 
+      {a.status === "scheduled" && (
+        <div className="notice" style={{ marginBottom: 10 }}>
+          Goes ahead automatically at {a.execute_after ? new Date(a.execute_after).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "soon"}. {a.why}
+        </div>
+      )}
+      {a.status === "pending" && a.why && <div className="sub" style={{ marginBottom: 8 }}>{a.why}</div>}
       {isEmail && (
         <>
           {p.original_snippet && <div className="notice" style={{ marginBottom: 10 }}><small>They wrote:</small> {p.original_snippet}</div>}
@@ -109,9 +115,9 @@ function ActionCard({ a, tz, onDone }: { a: Action; tz: string; onDone: () => vo
 
       {err && <div className="error" style={{ marginTop: 10 }}>{err}</div>}
       <div className="row" style={{ marginTop: 14, justifyContent: "flex-end" }}>
-        <button className="btn ghost danger" onClick={() => decide("reject")} disabled={busy}>Discard</button>
+        <button className="btn ghost danger" onClick={() => decide("reject")} disabled={busy}>{a.status === "scheduled" ? "Cancel" : "Discard"}</button>
         <button className="btn primary" onClick={() => decide("approve")} disabled={busy}>
-          {busy ? "Working" : isEmail ? "Approve and send" : a.kind === "create_event" ? "Add to calendar" : "Mark done"}
+          {busy ? "Working" : a.status === "scheduled" ? "Do it now" : isEmail ? "Approve and send" : a.kind === "create_event" ? "Add to calendar" : "Mark done"}
         </button>
       </div>
     </div>

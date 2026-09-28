@@ -223,6 +223,10 @@ export async function calendarList(token: string, timeMin: string, timeMax: stri
   }));
 }
 
+export async function calendarDelete(token: string, eventId: string) {
+  return await g(token, `${CAL}/${encodeURIComponent(eventId)}?sendUpdates=all`, { method: "DELETE" });
+}
+
 export async function calendarInsert(token: string, ev: {
   summary: string; start: string; end: string; timezone: string; location?: string; description?: string; attendees?: string[];
 }) {

@@ -1,11 +1,15 @@
 import { useMemo, useState } from "react";
 import { ago, ErrorBox, fn, Loading, must, Profile, supabase, useLoad } from "../lib";
+import { enablePush, isStandalone, pushEnabledHere, pushSupported } from "../push";
 
 export default function Settings({ profile, onSaved, params }: { profile: Profile; onSaved: () => void; params: URLSearchParams }) {
   const [name, setName] = useState(profile.display_name ?? "");
   const [tz, setTz] = useState(profile.timezone);
   const [hour, setHour] = useState(profile.brief_hour);
   const [remindEmail, setRemindEmail] = useState(profile.remind_by_email);
+  const [level, setLevel] = useState(profile.interrupt_level ?? "balanced");
+  const pushOn = useLoad(pushEnabledHere);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -17,7 +21,7 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    const { error } = await supabase.from("profiles").update({ display_name: name.trim() || null, timezone: tz, brief_hour: hour, remind_by_email: remindEmail }).eq("id", profile.id);
+    const { error } = await supabase.from("profiles").update({ display_name: name.trim() || null, timezone: tz, brief_hour: hour, remind_by_email: remindEmail, interrupt_level: level }).eq("id", profile.id);
     if (error) return setErr(error.message);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -67,6 +71,20 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
         )}
       </div>
 
+      <div className="card">
+        <h2>Notifications on this device</h2>
+        {pushOn.data ? <div className="success">Push notifications are on for this device.</div> : (
+          <div className="row spread wrap">
+            <p className="ink2" style={{ margin: 0 }}>
+              {pushSupported() ? "Get alerts on this phone or computer, even when Twofold is closed." : !isStandalone() && /iphone|ipad/i.test(navigator.userAgent) ? "On iPhone: tap Share, then Add to Home Screen, open Twofold from there, and come back here." : "This browser cannot show notifications."}
+            </p>
+            {pushSupported() && <button className="btn primary" onClick={async () => { setPushMsg(await enablePush(profile.id)); pushOn.reload(); }}>Turn on</button>}
+          </div>
+        )}
+        {pushMsg && <div className="error" style={{ marginTop: 8 }}>{pushMsg}</div>}
+        <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>Install tip: add Twofold to your home screen or dock from the browser menu to use it like an app. Everything stays in sync across devices.</p>
+      </div>
+
       <form className="card" onSubmit={save}>
         <h2>You</h2>
         <label className="field"><span>First name</span><input className="input" value={name} onChange={(e) => setName(e.target.value)} /></label>
@@ -76,6 +94,13 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
         <label className="field"><span>Morning brief at</span>
           <select className="input" value={hour} onChange={(e) => setHour(Number(e.target.value))}>
             {Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{new Date(2000, 0, 1, h).toLocaleTimeString("en-US", { hour: "numeric" })}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>How often can Twofold interrupt you?</span>
+          <select className="input" value={level} onChange={(e) => setLevel(e.target.value as any)}>
+            <option value="quiet">Quiet: only important things buzz, the rest waits for the brief</option>
+            <option value="balanced">Balanced</option>
+            <option value="chatty">Chatty: tell me most things</option>
           </select>
         </label>
         <label className="row" style={{ marginBottom: 14 }}>
@@ -91,6 +116,10 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
         <div className="row wrap">
           <a className="btn" href="#/money">Money</a>
           <a className="btn" href="#/memory">Memory</a>
+          <a className="btn" href="#/goals">Goals</a>
+          <a className="btn" href="#/people">People</a>
+          <a className="btn" href="#/activity">Activity</a>
+          <a className="btn" href="#/rules">Rules</a>
           {profile.is_admin && <a className="btn" href="#/admin">Admin</a>}
           <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
         </div>

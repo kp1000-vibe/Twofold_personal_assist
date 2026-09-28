@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Empty, ErrorBox, fromLocalInput, Loading, must, Profile, supabase, useLoad, when } from "../lib";
 
-type Task = { id: string; title: string; notes: string | null; kind: string; due_at: string | null; remind_at: string | null; status: string; source: string; completed_at: string | null };
+type Task = { id: string; title: string; notes: string | null; kind: string; due_at: string | null; remind_at: string | null; status: string; source: string; completed_at: string | null; goal_id: string | null };
 
 export default function Tasks({ profile }: { profile: Profile }) {
   const open = useLoad(async () => must(await supabase.from("tasks").select("*").eq("status", "open").order("due_at", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false })) as Task[]);
@@ -29,9 +29,10 @@ export default function Tasks({ profile }: { profile: Profile }) {
     done.reload();
   };
 
-  const list = open.data ?? [];
+  const list = (open.data ?? []).filter((t) => !t.goal_id);
   const followups = list.filter((t) => t.kind === "follow_up");
-  const rest = list.filter((t) => t.kind !== "follow_up");
+  const promises = list.filter((t) => t.kind === "commitment");
+  const rest = list.filter((t) => t.kind !== "follow_up" && t.kind !== "commitment");
 
   const Row = ({ t }: { t: Task }) => {
     const overdue = t.due_at && new Date(t.due_at).getTime() < Date.now();
@@ -65,6 +66,10 @@ export default function Tasks({ profile }: { profile: Profile }) {
         <>
           <div className="card" style={{ padding: "4px 14px" }}>
             {rest.length === 0 ? <Empty title="Clear list">Tell the chat "remind me to..." or add one above.</Empty> : rest.map((t) => <Row key={t.id} t={t} />)}
+          </div>
+          <h2 style={{ marginTop: 26 }}>Promises you made</h2>
+          <div className="card" style={{ padding: "4px 14px" }}>
+            {promises.length === 0 ? <Empty title="No open promises">When you promise something in chat or email, Twofold tracks it here.</Empty> : promises.map((t) => <Row key={t.id} t={t} />)}
           </div>
           <h2 style={{ marginTop: 26 }}>Waiting on a reply</h2>
           <div className="card" style={{ padding: "4px 14px" }}>

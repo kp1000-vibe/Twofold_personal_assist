@@ -12,6 +12,7 @@ export const supabase = createClient(url, key, { auth: { persistSession: true, a
 export type Profile = {
   id: string; email: string | null; display_name: string | null; timezone: string; brief_hour: number;
   remind_by_email: boolean; beta_access: boolean; is_admin: boolean; google_slot: boolean;
+  interrupt_level: "quiet" | "balanced" | "chatty";
 };
 
 /** Call an edge function and surface its error message. */
@@ -159,6 +160,10 @@ const P: Record<string, string> = {
   memory: "M12 4a5 5 0 00-5 5c0 2 1 3 2 4v3h6v-3c1-1 2-2 2-4a5 5 0 00-5-5zM10 20h4",
   settings: "M12 9a3 3 0 100 6 3 3 0 000-6zM19 12l2-1-1-3-2 .3-1.4-1.4L17 5l-3-1-1 2h-2L10 4 7 5l.4 2-1.4 1.4L4 8l-1 3 2 1v0l-2 1 1 3 2-.3 1.4 1.4L7 19l3 1 1-2h2l1 2 3-1-.4-2 1.4-1.4 2 .4 1-3z",
   admin: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  goals: "M12 3a9 9 0 100 18 9 9 0 000-18zM12 7a5 5 0 100 10 5 5 0 000-10zM12 11a1 1 0 100 2 1 1 0 000-2z",
+  people: "M9 11a4 4 0 100-8 4 4 0 000 8zM2 21v-1a6 6 0 0112 0v1M16 3.5a4 4 0 010 7.5M22 21v-1a6 6 0 00-4-5.6",
+  activity: "M3 12h4l3 8 4-16 3 8h4",
+  rules: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7zM9 12h6M12 9v6",
 };
 export function Icon({ name }: { name: string }) {
   return (
