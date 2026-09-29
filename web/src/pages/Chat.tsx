@@ -99,7 +99,7 @@ export default function Chat({ profile, prefill }: { profile: Profile; prefill?:
       <div className="page-head" style={{ marginBottom: 6 }}>
         <div>
           <h1>Hi{profile.display_name ? ` ${profile.display_name}` : ""}</h1>
-          <p>Ask for anything. Drafts and bookings wait for your OK.</p>
+          <p>{profile.account_type === "teen" ? "You are chatting with Twofold, an AI assistant, not a person." : "Ask for anything. Drafts and bookings wait for your OK."}</p>
         </div>
         {msgs.length > 0 && <button className="btn ghost sm" onClick={clear}>Clear chat</button>}
       </div>

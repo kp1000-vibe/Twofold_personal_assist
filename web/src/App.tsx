@@ -19,10 +19,15 @@ import People from "./pages/People";
 import Goals from "./pages/Goals";
 import Decisions from "./pages/Decisions";
 import Privacy from "./pages/Privacy";
+import Family from "./pages/Family";
+import More from "./pages/More";
 
-const NAV = [
+// the four places people live in; everything else sits under More
+export const PRIMARY = ["chat", "today", "family", "approvals"];
+export const NAV = [
   { id: "chat", label: "Chat", icon: "chat" },
   { id: "today", label: "Today", icon: "today" },
+  { id: "family", label: "Family", icon: "family" },
   { id: "approvals", label: "Approvals", icon: "approvals" },
   { id: "tasks", label: "Tasks", icon: "tasks" },
   { id: "goals", label: "Goals", icon: "goals" },
@@ -72,6 +77,8 @@ export default function App() {
   useEffect(() => { loadProfile(); }, [session?.user.id]);
   // one ping per load counts this as an active day
   useEffect(() => { if (profile?.beta_access) supabase.rpc("ping", { p_surface: "web" }).then(() => {}); }, [profile?.id, profile?.beta_access]);
+  // an existing user who opened a family invite link lands on the Family page with the code filled in
+  useEffect(() => { if (profile?.beta_access && (localStorage.getItem("twofold_invite") ?? "").startsWith("FAM")) go("family"); }, [profile?.id, profile?.beta_access]);
 
   // live badge for approvals
   useEffect(() => {
@@ -99,7 +106,11 @@ export default function App() {
   if (!profile.beta_access) return <Gate onJoined={loadProfile} />;
 
   const page = route.page && route.page !== "signin" && route.page !== "signup" ? route.page : "chat";
-  const nav = profile.is_admin ? [...NAV, { id: "admin", label: "Admin", icon: "admin" }] : NAV;
+  const teen = profile.account_type === "teen";
+  const hiddenForTeens = ["approvals", "inbox", "money", "rules", "automations"];
+  const nav = (profile.is_admin ? [...NAV, { id: "admin", label: "Admin", icon: "admin" }] : NAV).filter((n) => !teen || !hiddenForTeens.includes(n.id));
+  const primary = nav.filter((n) => PRIMARY.includes(n.id));
+  const secondary = nav.filter((n) => !PRIMARY.includes(n.id));
 
   const body = (() => {
     switch (page) {
@@ -111,6 +122,8 @@ export default function App() {
       case "goals": return <Goals profile={profile} />;
       case "people": return <People profile={profile} />;
       case "decisions": return <Decisions params={route.params} />;
+      case "family": return <Family profile={profile} params={route.params} />;
+      case "more": return <More items={secondary} />;
       case "activity": return <Activity />;
       case "rules": return <Rules />;
       case "memory": return <Memory />;
@@ -124,11 +137,18 @@ export default function App() {
     <div className="shell">
       <aside className="side">
         <Logo />
-        {nav.map((n) => (
+        {primary.map((n) => (
           <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? "active" : ""}`}>
             <Icon name={n.icon} />
             {n.label}
             {n.id === "approvals" && pending > 0 && <span className="badge">{pending}</span>}
+          </a>
+        ))}
+        <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", margin: "14px 10px 4px" }}>More</div>
+        {secondary.map((n) => (
+          <a key={n.id} href={`#/${n.id}`} className={`nav-item ${page === n.id ? "active" : ""}`} style={{ padding: "6px 10px", fontSize: 14 }}>
+            <Icon name={n.icon} />
+            {n.label}
           </a>
         ))}
         <div className="foot">
@@ -138,8 +158,8 @@ export default function App() {
       </aside>
       <main className="main">{body}</main>
       <nav className="tabbar">
-        {nav.filter((n) => ["chat", "today", "approvals", "tasks", "inbox", "settings"].includes(n.id)).map((n) => (
-          <a key={n.id} href={`#/${n.id}`} className={page === n.id ? "active" : ""}>
+        {[...primary, { id: "more", label: "More", icon: "more" }].map((n) => (
+          <a key={n.id} href={`#/${n.id}`} className={page === n.id || (n.id === "more" && secondary.some((s) => s.id === page)) ? "active" : ""}>
             <Icon name={n.icon} />
             {n.label}
             {n.id === "approvals" && pending > 0 && <span className="badge">{pending}</span>}

@@ -11,6 +11,7 @@ async function appUrl(): Promise<string> {
 export default handle(async (req) => {
   if (req.method === "POST") {
     const profile = await requireUser(req);
+    if ((profile as any).account_type === "teen") throw new HttpError(403, "Connecting Google is for adult accounts only.");
     if (!profile.google_slot) {
       throw new HttpError(403, "Google connect is limited to 100 beta testers until Google finishes reviewing the app. You are on the list.");
     }

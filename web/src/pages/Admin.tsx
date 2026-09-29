@@ -47,6 +47,7 @@ export default function Admin() {
     <div>
       <div className="page-head"><div><h1>Admin</h1><p>Beta health and unit economics, last 30 days.</p></div><button className="btn" onClick={() => { m.reload(); g.reload(); users.reload(); wait.reload(); }}>Refresh</button></div>
       {g.data && <Growth g={g.data} />}
+      <SafetyQueue />
       <ErrorBox msg={err ?? m.error} />
       {m.loading || !x ? <Loading /> : (
         <>
@@ -135,6 +136,26 @@ export default function Admin() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function SafetyQueue() {
+  const flags = useLoad(async () => must(await supabase.from("safety_flags").select("*").eq("reviewed", false).order("created_at", { ascending: false }).limit(50)) as any[]);
+  const mark = async (id: number) => { await supabase.from("safety_flags").update({ reviewed: true }).eq("id", id); flags.reload(); };
+  if (!flags.data?.length) return null;
+  return (
+    <div className="card" style={{ borderLeft: "4px solid var(--bad)" }}>
+      <h2 style={{ marginTop: 0 }}>Teen safety flags ({flags.data.length} to review)</h2>
+      <p className="muted" style={{ marginTop: 0 }}>Jev screens every teen message and reply. Review these, and act if someone may be at risk.</p>
+      {flags.data.map((f) => (
+        <div key={f.id} className="item">
+          <span className="chip bad">{f.category}</span>
+          <div className="grow"><div className="title">{f.direction === "in" ? "Teen wrote" : "Reply to teen"} · score {Number(f.score).toFixed(2)}</div><div className="sub">{f.excerpt}</div></div>
+          <small>{ago(f.created_at)}</small>
+          <button className="btn ghost sm" onClick={() => mark(f.id)}>Reviewed</button>
+        </div>
+      ))}
     </div>
   );
 }

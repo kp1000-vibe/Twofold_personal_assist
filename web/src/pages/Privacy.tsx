@@ -60,8 +60,13 @@ export default function Privacy() {
       <h2>Security</h2>
       <p>Data is encrypted in transit and at rest. Each account can only read its own rows. Email and web content is treated as untrusted data, and the assistant never follows instructions hidden inside it.</p>
 
-      <h2>Children</h2>
-      <p>Twofold is not for anyone under 18.</p>
+      <h2>Families, teens and children</h2>
+      <ul>
+        <li><strong>Households:</strong> only what you put on family lists, the family calendar, shared expenses or the family chat is visible to your household. Your personal chats, email, calendar, memories and private lists are never shown to family members.</li>
+        <li><strong>Teens (13 to 17):</strong> can join only through an invite from a parent or legal guardian, who confirms their age and consents. Teens can use family features and the AI assistant with teen safety protections: every teen message and reply is automatically screened, unsafe replies are blocked, possible safety issues are logged for review by our team, and the assistant always identifies itself as an AI. Teens cannot connect Gmail or Google Calendar and cannot see shared family money.</li>
+        <li><strong>Children under 13</strong> do not get accounts. A parent may add a child's first name to the household so they can appear on the family calendar and chores; we collect nothing else about them.</li>
+        <li>A parent can remove a teen or child from the household at any time, which removes their access to household data. To delete a teen's account and data, contact us below.</li>
+      </ul>
 
       <h2>Contact</h2>
       <p>Questions or deletion requests: <a href={`mailto:${CONTACT}`}>{CONTACT}</a></p>

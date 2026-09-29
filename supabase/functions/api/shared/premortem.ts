@@ -5,6 +5,7 @@ import { admin, clip, localNow, Profile } from "./util.ts";
 import { claudeJson, jev, MODELS, score } from "./ai.ts";
 import { accessToken, calendarList, CalEvent } from "./google.ts";
 import { logActivity, notify, queueAction } from "./trust.ts";
+import { getFamily, isAdult } from "./family.ts";
 
 const DAY_START = 8 * 60;   // working window for free time, local minutes
 const DAY_END = 19 * 60;
@@ -123,6 +124,30 @@ export async function runPremortem(u: Profile, opts: { manual?: boolean } = {}) 
   // ------------------------------------------------------------ gather
   const token = await accessToken(u.id);
   const events: CalEvent[] = token ? await calendarList(token, rangeStart, rangeEnd, 150).catch(() => []) : [];
+  // family calendar: my family events join my week, and the house gets its own checks
+  const family = await getFamily(u.id);
+  const familyRisks: Risk[] = [];
+  if (family) {
+    const { data: fev } = await db.from("family_events").select("*").eq("household_id", family.household.id).lt("start_at", rangeEnd).gt("end_at", rangeStart);
+    const nm = (id: string | null) => family.members.find((m) => m.id === id)?.name ?? null;
+    for (const e of fev ?? []) {
+      const mine = e.member_ids.includes(family.me.id) || e.driver_id === family.me.id;
+      if (mine) events.push({ id: e.id, summary: `${e.title} (family)`, start: e.start_at, end: e.end_at, allDay: e.all_day, location: e.location ?? undefined });
+      const when = new Date(e.start_at).toLocaleString("en-US", { timeZone: tz, weekday: "long", hour: "numeric", minute: "2-digit" });
+      if (e.needs_driver && !e.driver_id && isAdult(family.me)) {
+        familyRisks.push({ key: `driver:${e.id}`, day: localParts(e.start_at, tz).date, text: `Nobody is driving ${e.member_ids.map(nm).filter(Boolean).join(" and ") || "the kids"} to ${e.title} on ${when}`, evidence: "Family calendar event marked needs a driver" });
+      }
+    }
+    // chore fairness over the last two weeks
+    const { data: log } = await db.from("chore_log").select("member_id").eq("household_id", family.household.id).gt("done_at", new Date(Date.now() - 14 * 864e5).toISOString());
+    const adults = family.members.filter(isAdult);
+    const counts = adults.map((m) => ({ m, n: (log ?? []).filter((l) => l.member_id === m.id).length }));
+    const total = counts.reduce((n, c) => n + c.n, 0);
+    const top = counts.sort((a, b) => b.n - a.n)[0];
+    if (adults.length > 1 && total >= 6 && top && top.n / total >= 0.7) {
+      familyRisks.push({ key: `chores:${monday}`, day: null, text: `${top.m.name} did ${Math.round((top.n / total) * 100)}% of the adult chores in the last 2 weeks`, evidence: `${total} chores logged` });
+    }
+  }
   const [{ data: tasks }, { data: overdue }, { data: subs }, { data: people }, { data: goals }] = await Promise.all([
     db.from("tasks").select("id, title, kind, due_at, goal_id").eq("user_id", u.id).eq("status", "open").gte("due_at", rangeStart).lt("due_at", rangeEnd),
     db.from("tasks").select("id, title, due_at").eq("user_id", u.id).eq("status", "open").eq("kind", "commitment").lt("due_at", rangeStart),
@@ -132,6 +157,7 @@ export async function runPremortem(u: Profile, opts: { manual?: boolean } = {}) 
   ]);
 
   const { risks, free, stats } = measureDays(days, events, tasks ?? [], tz);
+  risks.push(...familyRisks);
 
   for (const t of overdue ?? []) risks.push({ key: `overdue:${t.id}`, day: null, text: `Still open from before: you promised "${t.title}"`, evidence: `Was due ${String(t.due_at).slice(0, 10)}` });
   for (const s of subs ?? []) risks.push({ key: `renew:${s.merchant}`, day: s.next_expected_at, text: `${s.merchant} renews ${weekdayName(s.next_expected_at)}${s.amount ? ` for ${s.amount} ${s.currency ?? ""}` : ""}`, evidence: "From past receipts" });

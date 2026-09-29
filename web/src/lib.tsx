@@ -14,6 +14,7 @@ export type Profile = {
   remind_by_email: boolean; beta_access: boolean; is_admin: boolean; google_slot: boolean;
   interrupt_level: "quiet" | "balanced" | "chatty";
   premortem_enabled?: boolean;
+  account_type?: "adult" | "teen";
 };
 
 /** Call an edge function and surface its error message. */
@@ -166,6 +167,8 @@ const P: Record<string, string> = {
   activity: "M3 12h4l3 8 4-16 3 8h4",
   rules: "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7zM9 12h6M12 9v6",
   decisions: "M4 12a8 8 0 1014-5.3M18 3v4h-4M12 8v4l3 2",
+  family: "M3 11l9-7 9 7M5 10v10h14V10M10 20v-5h4v5",
+  more: "M5 12h.01M12 12h.01M19 12h.01",
 };
 export function Icon({ name }: { name: string }) {
   return (

@@ -9,6 +9,8 @@ import { indexText, searchKnowledge } from "./knowledge.ts";
 import { simulate } from "./finance.ts";
 import { runPremortem } from "./premortem.ts";
 import { budgetFor } from "./plan.ts";
+import { Family, FAMILY_TOOL_DEFS, FAMILY_TOOLS, familyBrief, getFamily, runFamilyTool, TEEN_FAMILY_TOOLS } from "./family.ts";
+import { flaggedGuidance, SAFE_FALLBACK, screen, TEEN_SYSTEM } from "./safety.ts";
 
 // ------------------------------------------------------------------ specialists
 export const SPECIALISTS: Record<string, { when: string; brief: string; tools: string[] }> = {
@@ -83,6 +85,11 @@ export const SPECIALISTS: Record<string, { when: string; brief: string; tools: s
     brief: "You are the archivist. Search the knowledge vault first, then email. Quote what you found and when.",
     tools: ["search_knowledge", "search_email", "list_people", "list_decisions"],
   },
+  family: {
+    when: "About the household or family: shared grocery or packing lists, chores and who does them, the family calendar, who drives the kids, family plans, shared bills and who owes whom",
+    brief: "You are the family coordinator. Use the family tools. Shared lists, chores and the family calendar are visible to everyone in the household. Groceries and chores are shared by default; anything else stays private unless the user says it is for the family. Assign chores fairly and say who has done what when it helps.",
+    tools: FAMILY_TOOLS,
+  },
   advice: {
     when: "Think through a decision or plan, or draft text that needs no tools",
     brief: "You are a thoughtful advisor. Check past decisions for conflicts and point them out. When a similar past decision has a recorded outcome, use it: what happened last time is the best evidence.",
@@ -154,12 +161,15 @@ export type AgentResult = { reply: string; meta: Record<string, unknown> };
 
 type Ctx = {
   profile: Profile; token: () => Promise<string | null>; actions: string[]; tools: string[];
-  sources: { title: string; url: string }[]; forceAsk: boolean; source: string;
+  sources: { title: string; url: string }[]; forceAsk: boolean; source: string; family: Family | null;
 };
+
+const TEEN_SPECIALISTS = ["chit_chat", "remember", "tasks", "goals", "research", "family", "recall", "advice"];
+const TEEN_TOOLS = new Set(["save_memory", "search_knowledge", "create_task", "list_tasks", "complete_task", "create_goal", "list_goals", "update_goal", "web_search", ...TEEN_FAMILY_TOOLS]);
 
 /** Run one request through instinct then thinking. */
 export async function runAgent(profile: Profile, message: string, opts: {
-  purpose?: string; background?: boolean; forceAsk?: boolean; attachments?: Attachment[]; history?: { role: string; content: string }[]; channel?: string; lite?: boolean;
+  purpose?: string; background?: boolean; forceAsk?: boolean; attachments?: Attachment[]; history?: { role: string; content: string }[]; channel?: string; lite?: boolean; familyThread?: boolean;
 } = {}): Promise<AgentResult> {
   const db = admin();
   const uid = profile.id;
@@ -172,12 +182,17 @@ export async function runAgent(profile: Profile, message: string, opts: {
     db.from("memories").select("id, content, reason, expectation, replay_note").eq("user_id", uid).eq("kind", "decision")
       .is("checked_at", null).gt("replay_asked_at", new Date(Date.now() - 14 * 864e5).toISOString()).limit(3),
   ]);
-  const openReplays = replays ?? [];
-  const mems = memories ?? [];
+  const openReplays = opts.familyThread ? [] : replays ?? [];
+  // in the family thread everyone reads the reply, so personal memories stay out of it
+  const mems = opts.familyThread ? [] : memories ?? [];
+  const family = await getFamily(uid);
+  const teen = (profile as any).account_type === "teen";
+  const teenScreen = teen ? await screen(uid, message, "in") : null;
+  const specialistOk = (k: string) => (k !== "family" || !!family) && (!teen || TEEN_SPECIALISTS.includes(k)) && (!opts.familyThread || ["family", "chit_chat", "research", "advice"].includes(k));
 
   // ------------------------------------------------------------ instinct
   const criteria: Record<string, string> = {};
-  for (const [k, v] of Object.entries(SPECIALISTS)) criteria[k] = v.when;
+  for (const [k, v] of Object.entries(SPECIALISTS)) if (specialistOk(k)) criteria[k] = v.when;
   const questions: Record<string, Question> = {
     intent: { type: "choice", instructions: "Which specialist should handle `message`? Use `recent_conversation` only to resolve short follow ups.", criteria },
     difficulty: { type: "score", instructions: "How hard is it to respond well to `message`?", criteria: ["Trivial: a greeting or a one line answer", "Simple: one clear step", "Involved: several steps or careful writing", "Hard: deep reasoning, high stakes, or many moving parts"] },
@@ -203,8 +218,8 @@ export async function runAgent(profile: Profile, message: string, opts: {
 
   const intentAns = choice(a, "intent");
   const ranked = Object.entries(intentAns?.probabilities ?? {}).sort((x, y) => y[1] - x[1]).map(([k]) => k);
-  const intent = SPECIALISTS[intentAns?.choice ?? ""] ? intentAns!.choice : "advice";
-  const intents = (intentAns?.confidence ?? 0) < 0.6 && ranked[1] && SPECIALISTS[ranked[1]] ? [intent, ranked[1]] : [intent];
+  const intent = criteria[intentAns?.choice ?? ""] ? intentAns!.choice : opts.familyThread ? "family" : "advice";
+  const intents = (intentAns?.confidence ?? 0) < 0.6 && ranked[1] && criteria[ranked[1]] ? [intent, ranked[1]] : [intent];
   const needsWeb = noul(a, "needs_web") > 0.7;
   const isCommitment = noul(a, "commitment") > 0.8;
   const isDecision = noul(a, "decision") > 0.8;
@@ -224,6 +239,13 @@ export async function runAgent(profile: Profile, message: string, opts: {
   if (isDecision) toolNames.add("save_decision");
   if (replayAnswer) toolNames.add("record_decision_outcome");
   if (!opts.background && !opts.lite && intent !== "chit_chat") toolNames.add("work_in_background");
+  if (teen) for (const t of [...toolNames]) if (!TEEN_TOOLS.has(t)) toolNames.delete(t);
+  if (opts.familyThread) {
+    for (const t of [...toolNames]) if (t !== "web_search" && !FAMILY_TOOL_DEFS[t]) toolNames.delete(t);
+    toolNames.delete("post_to_family");
+    for (const t of teen ? TEEN_FAMILY_TOOLS : FAMILY_TOOLS) if (t !== "post_to_family") toolNames.add(t);
+  }
+  if (!family) for (const t of FAMILY_TOOLS) toolNames.delete(t);
   const tools: unknown[] = [];
   for (const t of toolNames) {
     if (t === "web_search") {
@@ -231,6 +253,7 @@ export async function runAgent(profile: Profile, message: string, opts: {
         ? { type: "web_search_20250305", name: "web_search", max_uses: opts.background ? 5 : 2, user_location: { type: "approximate", timezone: profile.timezone } }
         : { type: "web_search_20260209", name: "web_search", max_uses: opts.background ? 5 : 2, user_location: { type: "approximate", timezone: profile.timezone } });
     } else if (TOOL_DEFS[t]) tools.push(TOOL_DEFS[t]);
+    else if (FAMILY_TOOL_DEFS[t]) tools.push(FAMILY_TOOL_DEFS[t]);
   }
 
   const picked = mems.filter((_, i) => noul(a, `mem_${i}`) > 0.6).slice(0, 10);
@@ -241,6 +264,10 @@ export async function runAgent(profile: Profile, message: string, opts: {
   const briefs = intents.map((i) => SPECIALISTS[i]?.brief).filter(Boolean);
   const system = [
     `You are Twofold, the chief of staff for ${profile.display_name ?? "the user"}.`,
+    teen ? TEEN_SYSTEM : "",
+    teenScreen ? flaggedGuidance(teenScreen) : "",
+    family ? familyBrief(family) : "",
+    opts.familyThread ? `You are replying in the family group thread of "${family?.household.name}". Everyone in the household reads it, including teens. The message is from ${profile.display_name ?? "a family member"}. Use only shared family information. Never reveal anyone's private email, memories, calendar details or money. Keep it short and friendly, like a helpful family member in a group chat.` : "",
     ...briefs,
     `Right now it is ${now.pretty} (${now.iso}) in their timezone ${profile.timezone}. Write datetimes for tools as ISO 8601 with offset ${now.offset} unless another timezone is clearly meant.`,
     gacct ? "Their Google account (Gmail and Calendar) is connected." : "Their Google account is NOT connected. For email or calendar, tell them to connect Google in Settings.",
@@ -283,7 +310,7 @@ export async function runAgent(profile: Profile, message: string, opts: {
   const ctx: Ctx = {
     profile,
     token: (() => { let t: Promise<string | null> | null = null; return () => (t ??= accessToken(uid)); })(),
-    actions: [], tools: [], sources: [], forceAsk: !!opts.forceAsk, source: opts.purpose ?? "chat",
+    actions: [], tools: [], sources: [], forceAsk: !!opts.forceAsk, source: opts.purpose ?? "chat", family,
   };
 
   let res: any = null;
@@ -314,11 +341,16 @@ export async function runAgent(profile: Profile, message: string, opts: {
     convo.push({ role: "user", content: results });
   }
 
-  const reply = textOf(res) || (ctx.actions.length ? "Done. Check your Approvals tab." : "Done.");
+  let reply = textOf(res) || (ctx.actions.length ? "Done. Check your Approvals tab." : "Done.");
+  if (teen) {
+    const out = await screen(uid, reply, "out");
+    if (["sexual", "danger", "exploitation"].some((k) => (out.scores[k] ?? 0) > 0.8)) reply = SAFE_FALLBACK;
+  }
   return {
     reply,
     meta: {
       intent, specialists: intents, intent_confidence: intentAns?.confidence ?? null,
+      ...(teen ? { teen: true, safety_flags: teenScreen?.flagged ?? [] } : {}), ...(opts.familyThread ? { family_thread: true } : {}),
       instinct: instinct.layer, instinct_ms: instinct.latency_ms,
       model, difficulty: Math.round(diff * 100) / 100,
       memories_used: picked.length, tools: ctx.tools, actions: ctx.actions,
@@ -365,6 +397,10 @@ async function runTool(name: string, input: any, ctx: Ctx): Promise<string> {
   const db = admin();
   const uid = ctx.profile.id;
   const via = ctx.source === "automation" ? "an automation" : ctx.source === "background" ? "a background job" : "you asked in chat";
+  if (FAMILY_TOOL_DEFS[name]) {
+    if (!ctx.family) return "The user is not in a household yet. They can create one on the Family page.";
+    return await runFamilyTool(name, input, ctx.profile, ctx.family);
+  }
   switch (name) {
     case "save_memory": {
       const content = String(input.content ?? "").slice(0, 500);
