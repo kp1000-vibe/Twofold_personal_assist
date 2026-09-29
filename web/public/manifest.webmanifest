@@ -1,7 +1,7 @@
 {
   "name": "Twofold",
   "short_name": "Twofold",
-  "description": "Your assistant with instincts",
+  "description": "The family that runs itself",
   "start_url": "/#/today",
   "display": "standalone",
   "background_color": "#f6f4ef",
