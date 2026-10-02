@@ -38,7 +38,17 @@ jobs:
       - run: npx cap sync android
       - name: Build test app (install directly on any Android phone)
         working-directory: web/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          set +e
+          ./gradlew assembleDebug --no-daemon --stacktrace > gradle.log 2>&1
+          code=$?
+          tail -80 gradle.log
+          if [ $code -ne 0 ]; then
+            # surface the cause as annotations so it is readable without opening the log
+            grep -A 12 "What went wrong" gradle.log | head -30 | while IFS= read -r line; do echo "::error::$line"; done
+            grep -E "^e: |error:" gradle.log | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+          fi
+          exit $code
       - uses: actions/upload-artifact@v4
         with:
           name: twofold-android-test-${{ github.run_number }}
