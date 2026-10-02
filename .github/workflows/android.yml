@@ -46,7 +46,7 @@ jobs:
           if [ $code -ne 0 ]; then
             # surface the cause as annotations so it is readable without opening the log
             grep -A 12 "What went wrong" gradle.log | head -30 | while IFS= read -r line; do echo "::error::$line"; done
-            grep -E "^e: |error:" gradle.log | head -10 | while IFS= read -r line; do echo "::error::$line"; done
+            grep -E "^e: |error:|Build file|line: [0-9]+|Caused by" gradle.log | head -12 | while IFS= read -r line; do echo "::error::$line"; done
           fi
           exit $code
       - uses: actions/upload-artifact@v4
