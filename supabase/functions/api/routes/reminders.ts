@@ -30,5 +30,43 @@ export default handle(async (req) => {
       console.error("reminder email", e);
     }
   }
-  return json({ scheduled_ran: ran, due: due?.length ?? 0, emailed: sent });
+  const family = await familyReminders();
+  return json({ scheduled_ran: ran, due: due?.length ?? 0, emailed: sent, family });
 });
+
+/** Chores and family items with a due time ping whoever they are assigned to (or the adults, if nobody is). */
+async function familyReminders() {
+  const db = admin();
+  const { data: items } = await db.from("list_items").select("id, text, due_at, assigned_to, repeat, list_id, lists(title, owner_id, household_id, shared)")
+    .eq("done", false).eq("remind", true).is("reminded_at", null).lte("due_at", new Date().toISOString()).limit(300);
+  let n = 0;
+  for (const it of (items ?? []) as any[]) {
+    await db.from("list_items").update({ reminded_at: new Date().toISOString() }).eq("id", it.id);
+    const list = it.lists;
+    let users: string[] = [];
+    let who = "";
+    let forSelf = false;
+    if (it.assigned_to) {
+      const { data: m } = await db.from("household_members").select("user_id, name, household_id").eq("id", it.assigned_to).maybeSingle();
+      who = m?.name ?? "";
+      if (m?.user_id) { users = [m.user_id]; forSelf = true; }
+      else if (m) {
+        // kids without a login: remind the adults
+        const { data: adults } = await db.from("household_members").select("user_id").eq("household_id", m.household_id).in("role", ["owner", "adult"]);
+        users = (adults ?? []).map((a) => a.user_id).filter(Boolean);
+      }
+    } else if (list?.shared && list.household_id) {
+      const { data: adults } = await db.from("household_members").select("user_id").eq("household_id", list.household_id).in("role", ["owner", "adult"]);
+      users = (adults ?? []).map((a) => a.user_id).filter(Boolean);
+    } else if (list?.owner_id) users = [list.owner_id];
+    for (const u of users) {
+      await notify({
+        user_id: u, title: `${who && !forSelf ? `${who}: ` : ""}${it.text}`,
+        body: `${list?.title ?? "List"}${it.repeat ? ` · repeats ${it.repeat}` : ""}`, link: "#/home",
+        why: it.assigned_to ? `It is due now and assigned to ${forSelf ? "you" : who}` : "It is due now and nobody has claimed it", importance: 2,
+      });
+      n++;
+    }
+  }
+  return n;
+}

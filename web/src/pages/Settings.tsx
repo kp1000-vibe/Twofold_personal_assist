@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ago, ErrorBox, fn, Loading, must, Profile, supabase, useLoad } from "../lib";
 import { enablePush, isStandalone, pushEnabledHere, pushSupported } from "../push";
 import TextChannels from "./TextChannels";
 import PlanCard from "./PlanCard";
+import { isNative, openExternal } from "../native";
 
 export default function Settings({ profile, onSaved, params }: { profile: Profile; onSaved: () => void; params: URLSearchParams }) {
   const [name, setName] = useState(profile.display_name ?? "");
@@ -36,7 +37,8 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
     setErr(null);
     try {
       const { url } = await fn<{ url: string }>("google-oauth");
-      window.location.href = url;
+      await openExternal(url);
+      if (isNative) setBusy(false);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -48,6 +50,8 @@ export default function Settings({ profile, onSaved, params }: { profile: Profil
     google.reload();
   };
 
+  // after Google sign in in the system browser, coming back refreshes the status
+  useEffect(() => { const f = () => google.reload(); window.addEventListener("twofold:resume", f); return () => window.removeEventListener("twofold:resume", f); }, []);
   const g = google.data;
   const flash = params.get("google");
 

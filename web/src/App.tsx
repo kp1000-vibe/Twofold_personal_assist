@@ -21,13 +21,15 @@ import Decisions from "./pages/Decisions";
 import Privacy from "./pages/Privacy";
 import Family from "./pages/Family";
 import More from "./pages/More";
+import Home from "./pages/Home";
 
 // the four places people live in; everything else sits under More
-export const PRIMARY = ["chat", "today", "family", "approvals"];
+export const PRIMARY = ["home", "family", "chat", "approvals"];
 export const NAV = [
+  { id: "home", label: "Home", icon: "home" },
+  { id: "family", label: "Family", icon: "family" },
   { id: "chat", label: "Chat", icon: "chat" },
   { id: "today", label: "Today", icon: "today" },
-  { id: "family", label: "Family", icon: "family" },
   { id: "approvals", label: "Approvals", icon: "approvals" },
   { id: "tasks", label: "Tasks", icon: "tasks" },
   { id: "goals", label: "Goals", icon: "goals" },
@@ -105,7 +107,7 @@ export default function App() {
   if (!profile) return <Loading />;
   if (!profile.beta_access) return <Gate onJoined={loadProfile} />;
 
-  const page = route.page && route.page !== "signin" && route.page !== "signup" ? route.page : "chat";
+  const page = route.page && route.page !== "signin" && route.page !== "signup" ? route.page : "home";
   const teen = profile.account_type === "teen";
   const hiddenForTeens = ["approvals", "inbox", "money", "rules", "automations"];
   const nav = (profile.is_admin ? [...NAV, { id: "admin", label: "Admin", icon: "admin" }] : NAV).filter((n) => !teen || !hiddenForTeens.includes(n.id));
@@ -123,13 +125,15 @@ export default function App() {
       case "people": return <People profile={profile} />;
       case "decisions": return <Decisions params={route.params} />;
       case "family": return <Family profile={profile} params={route.params} />;
+      case "home": return <Home profile={profile} />;
+      case "chat": return <Chat profile={profile} prefill={route.params.get("q") ?? undefined} />;
       case "more": return <More items={secondary} />;
       case "activity": return <Activity />;
       case "rules": return <Rules />;
       case "memory": return <Memory />;
       case "settings": return <Settings profile={profile} onSaved={loadProfile} params={route.params} />;
       case "admin": return profile.is_admin ? <Admin /> : <Chat profile={profile} />;
-      default: return <Chat profile={profile} prefill={route.params.get("q") ?? undefined} />;
+      default: return <Home profile={profile} />;
     }
   })();
 

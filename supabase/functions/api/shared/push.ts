@@ -1,6 +1,7 @@
 // Web push to installed apps and browsers. Keys live in Vault and app_settings.
 import webpush from "npm:web-push@3.6.7";
 import { admin, secret } from "./util.ts";
+import { apnsReady, fcmReady, sendApns, sendFcm } from "./fcm.ts";
 
 let ready = false;
 async function setup() {
@@ -15,9 +16,19 @@ async function setup() {
 
 export async function pushTo(userId: string, msg: { title: string; body?: string | null; link?: string }) {
   try {
-    const { data: subs } = await admin().from("push_subscriptions").select("*").eq("user_id", userId);
-    if (!subs?.length || !(await setup())) return 0;
+    const { data: all } = await admin().from("push_subscriptions").select("*").eq("user_id", userId);
     let sent = 0;
+    // phones with the native app
+    for (const s of (all ?? []).filter((x) => x.platform !== "web")) {
+      const token = s.endpoint.replace(/^(fcm|apns):/, "");
+      const ios = s.platform === "ios";
+      if (ios ? !apnsReady() : !fcmReady()) continue;
+      const r = await (ios ? sendApns(token, msg) : sendFcm(token, msg)).catch(() => "error" as const);
+      if (r === "ok") sent++;
+      else if (r === "gone") await admin().from("push_subscriptions").delete().eq("id", s.id);
+    }
+    const subs = (all ?? []).filter((x) => x.platform === "web");
+    if (!subs.length || !(await setup())) return sent;
     for (const s of subs) {
       try {
         await webpush.sendNotification(

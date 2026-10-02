@@ -1,0 +1,65 @@
+name: Android app
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Firebase config (turns on phone push when the secret exists)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "VITE_NATIVE_PUSH=1" >> $GITHUB_ENV
+          fi
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build test app (install directly on any Android phone)
+        working-directory: web/android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twofold-android-test-${{ github.run_number }}
+          path: web/android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Signed Play Store bundle (only when the upload key secrets exist)
+        working-directory: web/android
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "No upload key yet, skipping the Play Store bundle"; exit 0; fi
+          echo "$KEYSTORE_B64" | base64 -d > upload.jks
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file=$PWD/upload.jks \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+      - uses: actions/upload-artifact@v4
+        if: ${{ hashFiles('web/android/app/build/outputs/bundle/release/*.aab') != '' }}
+        with:
+          name: twofold-play-store-${{ github.run_number }}
+          path: web/android/app/build/outputs/bundle/release/app-release.aab

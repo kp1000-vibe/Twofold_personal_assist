@@ -224,3 +224,10 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
   .hero, .steps, .trust { grid-template-columns: 1fr; }
   .landing nav { margin-bottom: 32px; }
 }
+
+/* ---------------- native app shell ---------------- */
+html.native body { padding-top: env(safe-area-inset-top); }
+html.native .main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+html.native .item input[type="checkbox"] { accent-color: var(--gold); }
+html.native { -webkit-tap-highlight-color: transparent; }
+html.native .btn, html.native .tabbar a { -webkit-user-select: none; user-select: none; }

@@ -3,7 +3,7 @@ import { Icon } from "../lib";
 /** Everything that is not a main tab, in one tidy screen (mostly for phones). */
 export default function More({ items }: { items: { id: string; label: string; icon: string }[] }) {
   const blurb: Record<string, string> = {
-    tasks: "Todos, reminders and promises", goals: "Bigger plans with steps", people: "Birthdays and keeping in touch",
+    tasks: "Your personal todos and promises", today: "Morning brief and updates", goals: "Bigger plans with steps", people: "Birthdays and keeping in touch",
     decisions: "Your calls and how they turned out", inbox: "Mail sorted by what needs you", money: "Subscriptions and bills",
     memory: "What Twofold knows about you", activity: "What it did and why, with undo", rules: "What it may do without asking",
     settings: "Plan, texting, Google, alerts", admin: "Growth and costs",

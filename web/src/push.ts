@@ -1,4 +1,5 @@
 import { supabase } from "./lib";
+import { enableNativePush, isNative, nativePushOn } from "./native";
 
 function b64ToBytes(b64: string) {
   const pad = "=".repeat((4 - (b64.length % 4)) % 4);
@@ -7,6 +8,7 @@ function b64ToBytes(b64: string) {
 }
 
 export function pushSupported() {
+  if (isNative) return true;
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
@@ -15,7 +17,7 @@ export function isStandalone() {
 }
 
 export async function registerSW() {
-  if (!("serviceWorker" in navigator)) return null;
+  if (isNative || !("serviceWorker" in navigator)) return null;
   try {
     return await navigator.serviceWorker.register("/sw.js");
   } catch {
@@ -25,6 +27,7 @@ export async function registerSW() {
 
 /** Ask permission, subscribe this device, and save it for the signed in user. */
 export async function enablePush(userId: string): Promise<string | null> {
+  if (isNative) { try { return await enableNativePush(userId); } catch (e) { return e instanceof Error ? e.message : String(e); } }
   if (!pushSupported()) return "This browser cannot show notifications. On iPhone, add Twofold to your Home Screen first.";
   const perm = await Notification.requestPermission();
   if (perm !== "granted") return "Notifications are blocked in your browser settings.";
@@ -39,6 +42,7 @@ export async function enablePush(userId: string): Promise<string | null> {
 }
 
 export async function pushEnabledHere() {
+  if (isNative) return nativePushOn();
   if (!pushSupported() || Notification.permission !== "granted") return false;
   const reg = await navigator.serviceWorker.getRegistration();
   return !!(await reg?.pushManager.getSubscription());

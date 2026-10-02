@@ -2,7 +2,7 @@
   "name": "Twofold",
   "short_name": "Twofold",
   "description": "The family that runs itself",
-  "start_url": "/#/today",
+  "start_url": "/#/home",
   "display": "standalone",
   "background_color": "#f6f4ef",
   "theme_color": "#1f2a44",
