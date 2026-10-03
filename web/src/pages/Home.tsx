@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ErrorBox, Loading, must, Profile, supabase, useLoad } from "../lib";
 import { enablePush, pushEnabledHere, pushSupported } from "../push";
 import WeekCheck from "./WeekCheck";
+import { Proposal, ProposalCard } from "./FamilyChat";
 
 type Member = { id: string; household_id: string; user_id: string | null; role: string; name: string; color: string | null };
 type Item = { id: string; list_id: string; text: string; done: boolean; assigned_to: string | null; due_at: string | null; repeat: string | null; lists: { title: string; kind: string; shared: boolean; owner_id: string } };
@@ -35,6 +36,7 @@ export default function Home({ profile }: { profile: Profile }) {
     return (data ?? []) as { member_id: string; streak: number; done_today: number }[];
   });
   const pushOn = useLoad(pushEnabledHere);
+  const proposals = useLoad(async () => must(await supabase.from("family_proposals").select("*").eq("status", "pending").order("created_at", { ascending: false }).limit(5)) as Proposal[]);
   const [scope, setScope] = useState<"mine" | "all">("mine");
   const [text, setText] = useState("");
   const [who, setWho] = useState("");
@@ -135,6 +137,13 @@ export default function Home({ profile }: { profile: Profile }) {
         <div className="notice row spread wrap" style={{ marginBottom: 12 }}>
           <span>Turn on notifications so reminders actually reach you.</span>
           <button className="btn sm primary" onClick={async () => { const m = await enablePush(profile.id); if (m) setErr(m); pushOn.reload(); }}>Turn on</button>
+        </div>
+      )}
+
+      {f && (proposals.data ?? []).length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div className="muted" style={{ fontSize: 13, fontWeight: 600, margin: "0 0 4px 2px" }}>✦ Twofold suggests</div>
+          {(proposals.data ?? []).map((p) => <ProposalCard key={p.id} p={p} me={f.me as any} members={f.members as any} onDone={() => { proposals.reload(); reloadAll(); }} />)}
         </div>
       )}
 

@@ -12,6 +12,9 @@ import phone from "./routes/phone.ts";
 import reflect from "./routes/reflect.ts";
 import account from "./routes/account.ts";
 import familyChat from "./routes/family-chat.ts";
+import familyAct from "./routes/family-act.ts";
+import familySources from "./routes/family-sources.ts";
+import inboundEmail from "./routes/inbound-email.ts";
 import inboundTwilio from "./routes/inbound-twilio.ts";
 import inboundSendblue from "./routes/inbound-sendblue.ts";
 import { cors, json } from "./shared/util.ts";
@@ -30,6 +33,9 @@ const routes: Record<string, (req: Request) => Promise<Response>> = {
   reflect,
   account,
   "family-chat": familyChat,
+  "family-act": familyAct,
+  "family-sources": familySources,
+  "inbound-email": inboundEmail,
   "inbound-twilio": inboundTwilio,
   "inbound-sendblue": inboundSendblue,
 };

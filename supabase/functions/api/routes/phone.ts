@@ -20,6 +20,7 @@ export default handle(async (req) => {
       out.webhooks = {
         twilio: `${base}/inbound-twilio`,
         sendblue: `${base}/inbound-sendblue?k=${await secret("twofold_webhook_key")}`,
+        postmark: `${base}/inbound-email?k=${await secret("twofold_webhook_key")}`,
       };
     }
     return json(out);

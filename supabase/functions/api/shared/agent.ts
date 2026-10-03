@@ -299,7 +299,8 @@ export async function runAgent(profile: Profile, message: string, opts: {
   // attachments reach Claude as short lived signed links
   const blocks: any[] = [];
   for (const att of attachments.slice(0, 5)) {
-    if (!att.path.startsWith(`${uid}/`)) continue;
+    const familyPhoto = !!(opts.familyThread && family && att.path.startsWith(`family/${family.household.id}/`));
+    if (!att.path.startsWith(`${uid}/`) && !familyPhoto) continue;
     const { data } = await db.storage.from("uploads").createSignedUrl(att.path, 600);
     if (!data?.signedUrl) continue;
     if (att.mime === "application/pdf") blocks.push({ type: "document", source: { type: "url", url: data.signedUrl }, title: att.name });

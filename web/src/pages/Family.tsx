@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ago, Empty, ErrorBox, fn, Loading, Markdown, must, Profile, supabase, useLoad, usd } from "../lib";
+import { Empty, ErrorBox, Loading, must, Profile, supabase, useLoad, usd } from "../lib";
+import FamilyChat from "./FamilyChat";
+import Connections from "./Connections";
 
 type Member = { id: string; household_id: string; user_id: string | null; role: "owner" | "adult" | "teen" | "kid"; name: string; color: string | null; birthday: string | null };
 type House = { id: string; name: string };
-type Tab = "home" | "lists" | "calendar" | "money" | "people";
+type Tab = "home" | "lists" | "calendar" | "money" | "connect" | "people";
 
 const COLORS = ["#E8A33D", "#5B8DEF", "#3FB68B", "#E36B6B", "#A77BDB", "#E88BB8", "#4FB3BF", "#8C9A5B"];
 const colorOf = (m: Member, i: number) => m.color ?? COLORS[i % COLORS.length];
@@ -25,7 +27,7 @@ export default function Family({ profile, params }: { profile: Profile; params: 
   if (fam.loading) return <Loading />;
   if (!fam.data) return <NoHousehold onDone={fam.reload} />;
   const { me, house, members } = fam.data;
-  const tabs: [Tab, string][] = [["home", "Family chat"], ["lists", "Lists and chores"], ["calendar", "Calendar"], ...(isAdult(me) ? [["money", "Money"] as [Tab, string]] : []), ["people", "People"]];
+  const tabs: [Tab, string][] = [["home", "Family chat"], ["lists", "Lists and chores"], ["calendar", "Calendar"], ...(isAdult(me) ? [["money", "Money"] as [Tab, string]] : []), ["connect", "School and daycare"], ["people", "People"]];
 
   return (
     <div>
@@ -45,10 +47,11 @@ export default function Family({ profile, params }: { profile: Profile; params: 
       <div className="row wrap" style={{ gap: 6, marginBottom: 14 }}>
         {tabs.map(([k, label]) => <button key={k} className={`btn sm ${tab === k ? "primary" : "ghost"}`} onClick={() => setTab(k)}>{label}</button>)}
       </div>
-      {tab === "home" && <Thread me={me} house={house} members={members} />}
+      {tab === "home" && <FamilyChat me={me} houseId={house.id} members={members} />}
       {tab === "lists" && <Lists me={me} house={house} members={members} profile={profile} />}
       {tab === "calendar" && <Calendar me={me} house={house} members={members} profile={profile} />}
       {tab === "money" && isAdult(me) && <Money me={me} house={house} members={members} profile={profile} />}
+      {tab === "connect" && <Connections members={members} isAdult={isAdult(me)} />}
       {tab === "people" && <People me={me} members={members} onChange={fam.reload} />}
     </div>
   );
@@ -89,69 +92,6 @@ function NoHousehold({ onDone }: { onDone: () => void }) {
         <p className="ink2" style={{ margin: 0 }}>Your chats with Twofold, email, calendar, memories and personal lists stay yours. Only what you put on family lists, the family calendar, shared expenses or the family chat is seen by the household.</p>
       </div>
       <ErrorBox msg={err} />
-    </div>
-  );
-}
-
-// ------------------------------------------------------------------ family chat
-type Msg = { id: string; author_user: string | null; author_name: string; content: string; meta: any; created_at: string };
-function Thread({ me, house, members }: { me: Member; house: House; members: Member[] }) {
-  const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const logRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    supabase.from("family_messages").select("*").order("created_at", { ascending: false }).limit(80).then(({ data }) => setMsgs(((data ?? []) as Msg[]).reverse()));
-    const ch = supabase.channel("family-thread")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "family_messages", filter: `household_id=eq.${house.id}` }, (p: any) => {
-        setMsgs((cur) => (cur.some((x) => x.id === p.new.id) ? cur : [...cur, p.new as Msg]));
-      }).subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [house.id]);
-  useEffect(() => { logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" }); }, [msgs, busy]);
-
-  const send = async (ask: boolean) => {
-    const t = text.trim();
-    if (!t || busy) return;
-    setBusy(true); setErr(null); setText("");
-    try { await fn("family-chat", { message: t, ask }); } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setText(t); } finally { setBusy(false); }
-  };
-  const color = (uid: string | null) => { const i = members.findIndex((m) => m.user_id === uid); return i >= 0 ? colorOf(members[i], i) : "var(--gold)"; };
-  const ideas = ["Add milk, eggs and bread to groceries", "Who is driving to soccer on Saturday?", "Split the Costco run, $142, I paid", "Make a weekly chore chart for the kids"];
-
-  return (
-    <div className="chat" style={{ height: "calc(100vh - 220px)", minHeight: 420 }}>
-      <div className="chat-log" ref={logRef}>
-        {msgs.length === 0 && (
-          <div className="empty" style={{ paddingTop: 40 }}>
-            <div className="big">Your family chat, with Twofold in it</div>
-            <p className="muted">Ask Twofold for anything the house needs. It only uses shared family info here, never anyone's private stuff.</p>
-            <div className="suggest">{ideas.map((s) => <button key={s} onClick={() => setText(s)}>{s}</button>)}</div>
-          </div>
-        )}
-        {msgs.map((m) => {
-          const mine = m.author_user === me.user_id;
-          const bot = !m.author_user;
-          return (
-            <div key={m.id} className={`msg ${mine ? "user" : "assistant"}`}>
-              <div className="bubble">
-                {!mine && <div style={{ fontSize: 12, fontWeight: 600, color: bot ? "var(--gold)" : color(m.author_user), marginBottom: 4 }}>{bot ? "Twofold (AI)" : m.author_name}</div>}
-                {bot ? <Markdown text={m.content} /> : m.content}
-                <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>{ago(m.created_at)}</div>
-              </div>
-            </div>
-          );
-        })}
-        {busy && <div className="msg assistant"><div className="bubble"><span className="thinking"><i /><i /> Twofold is on it</span></div></div>}
-        <ErrorBox msg={err} />
-      </div>
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); send(true); }}>
-        <textarea rows={1} value={text} placeholder="Message the family" onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(true); } }} />
-        <button type="button" className="btn" disabled={busy || !text.trim()} onClick={() => send(false)} title="Just post, no AI">Post</button>
-        <button className="btn primary" disabled={busy || !text.trim()} title="Post and ask Twofold">Ask Twofold</button>
-      </form>
     </div>
   );
 }
@@ -518,6 +458,7 @@ function People({ me, members, onChange }: { me: Member; members: Member[]; onCh
             {((me.role === "owner" && m.id !== me.id) || (m.role === "kid" && isAdult(me))) && <button className="btn ghost sm danger" onClick={() => removeMember(m)}>Remove</button>}
           </div>
         ))}
+        {isAdult(me) && <CalendarShare me={me} onChange={onChange} />}
         <button className="btn ghost sm danger" style={{ marginTop: 10 }} onClick={leave}>Leave household</button>
       </div>
       {isAdult(me) && (
@@ -550,6 +491,22 @@ function People({ me, members, onChange }: { me: Member; members: Member[]; onCh
         </div>
       )}
       <ErrorBox msg={err} />
+    </div>
+  );
+}
+
+function CalendarShare({ me, onChange }: { me: Member; onChange: () => void }) {
+  const [v, setV] = useState((me as any).share_calendar ?? "off");
+  const save = async (val: string) => { setV(val); await supabase.from("household_members").update({ share_calendar: val }).eq("id", me.id); onChange(); };
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+      <strong>Share my calendar with Twofold for the family</strong>
+      <p className="muted" style={{ margin: "4px 0 8px", fontSize: 14 }}>So it can tell who is free for pickups and plan chores around busy days. Needs Google connected in Settings.</p>
+      <div className="row wrap" style={{ gap: 6 }}>
+        {[["off", "Off"], ["busy", "Busy or free only"], ["details", "Event names too"]].map(([k, l]) => (
+          <button key={k} className={`btn sm ${v === k ? "primary" : "ghost"}`} onClick={() => save(k)}>{l}</button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { logActivity, notify } from "../shared/trust.ts";
 import { runAutomation } from "../shared/automations.ts";
 import { runPremortem } from "../shared/premortem.ts";
 import { runDecisionReplay } from "../shared/replay.ts";
+import { runFamilyAgent } from "../shared/familyAgent.ts";
 
 const SCAN_HOUR = 16;      // afternoon scan, local time
 const RADAR_DAY = 0;       // Sunday
@@ -42,7 +43,8 @@ export default handle(async (req) => {
       console.error("insights", u.id, e);
     }
   }
-  return json({ users: users?.length ?? 0, autos, scans, radars, premortems, replays });
+  const family = await runFamilyAgent().catch((e) => ({ error: String(e) }));
+  return json({ users: users?.length ?? 0, autos, scans, radars, premortems, replays, family });
 });
 
 async function alreadySaid(uid: string, key: string) {
