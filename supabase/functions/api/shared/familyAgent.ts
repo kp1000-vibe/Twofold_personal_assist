@@ -80,7 +80,9 @@ export async function proposeDrivers(f: Family) {
     ];
     const id = await propose(f, {
       kind: "driver",
-      title: pick ? `${pick.name} could drive ${kids} to ${ev.title}` : `Nobody looks free to drive ${kids} to ${ev.title}`,
+      title: pick ? `${pick.name} could drive ${kids} to ${ev.title}`
+        : unknown.length ? `Who can drive ${kids} to ${ev.title}?`
+        : `Nobody looks free to drive ${kids} to ${ev.title}`,
       body: `${when}${ev.location ? ` at ${ev.location}` : ""}\n${lines.join("\n")}`,
       payload: { event_id: ev.id, driver_member_id: pick?.id ?? null, options: adults.map((m) => ({ id: m.id, name: m.name })) },
       source_ref: `driver:${ev.id}`, importance: pick ? 1.8 : 2.3,
