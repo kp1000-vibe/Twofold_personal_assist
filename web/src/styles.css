@@ -231,3 +231,21 @@ html.native .main { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 html.native .item input[type="checkbox"] { accent-color: var(--gold); }
 html.native { -webkit-tap-highlight-color: transparent; }
 html.native .btn, html.native .tabbar a { -webkit-user-select: none; user-select: none; }
+
+/* family header and lists on phones */
+.fam-head { margin-bottom: 14px; }
+.lists-grid { grid-template-columns: minmax(200px, 260px) 1fr; align-items: start; }
+.list-picker .nav-item { width: 100%; }
+@media (max-width: 820px) {
+  .fam-scroll, .row.wrap.fam-scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px; }
+  .fam-scroll::-webkit-scrollbar { display: none; }
+  .fam-scroll > * { flex: none; }
+  .lists-grid { grid-template-columns: 1fr; }
+  .lists-grid > .stack { display: contents; }
+  .lists-grid > .stack > * { margin-top: 0; }
+  .list-picker { order: 0; display: flex; gap: 4px; overflow-x: auto; }
+  .list-picker .nav-item { width: auto; flex: none; white-space: nowrap; }
+  .list-main { order: 1; }
+  .list-new { order: 2; }
+  .list-board { order: 3; }
+}

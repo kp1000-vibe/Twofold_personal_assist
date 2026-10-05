@@ -31,20 +31,20 @@ export default function Family({ profile, params }: { profile: Profile; params: 
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h1>{house.name}</h1>
-          <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
-            {members.map((m, i) => (
-              <span key={m.id} className="chip" style={{ background: `${colorOf(m, i)}22`, color: "var(--ink)" }}>
-                <span className="dot" style={{ background: colorOf(m, i), marginRight: 6 }} />{m.name}{m.role === "kid" ? " (kid)" : m.role === "teen" ? " (teen)" : ""}
-              </span>
-            ))}
-          </div>
+      <div className="fam-head">
+        <div className="row spread" style={{ flexWrap: "nowrap" }}>
+          <h1 style={{ margin: 0 }}>{house.name}</h1>
+          {isAdult(me) && <button className="btn sm" onClick={() => setTab("people")}>Invite</button>}
         </div>
-        {isAdult(me) && <button className="btn" onClick={() => setTab("people")}>Invite</button>}
+        <div className="row fam-scroll" style={{ gap: 6, marginTop: 8 }}>
+          {members.map((m, i) => (
+            <span key={m.id} className="chip" style={{ background: `${colorOf(m, i)}22`, color: "var(--ink)" }}>
+              <span className="dot" style={{ background: colorOf(m, i), marginRight: 6 }} />{m.name}{m.role === "kid" ? " (kid)" : m.role === "teen" ? " (teen)" : ""}
+            </span>
+          ))}
+        </div>
       </div>
-      <div className="row wrap" style={{ gap: 6, marginBottom: 14 }}>
+      <div className="row wrap fam-scroll" style={{ gap: 6, marginBottom: 14 }}>
         {tabs.map(([k, label]) => <button key={k} className={`btn sm ${tab === k ? "primary" : "ghost"}`} onClick={() => setTab(k)}>{label}</button>)}
       </div>
       {tab === "home" && <FamilyChat me={me} houseId={house.id} members={members} />}
@@ -148,18 +148,18 @@ function Lists({ me, house, members, profile }: { me: Member; house: House; memb
   }, [log.data, members]);
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: "minmax(200px, 260px) 1fr", alignItems: "start" }}>
+    <div className="grid lists-grid">
       <div className="stack">
-        <div className="card" style={{ padding: 8 }}>
+        <div className="card list-picker" style={{ padding: 8 }}>
           {(lists.data ?? []).map((l) => (
-            <button key={l.id} className={`nav-item ${cur?.id === l.id ? "active" : ""}`} style={{ width: "100%", border: 0, background: "none", cursor: "pointer" }} onClick={() => setSel(l.id)}>
+            <button key={l.id} className={`nav-item ${cur?.id === l.id ? "active" : ""}`} style={{ border: 0, background: "none", cursor: "pointer" }} onClick={() => setSel(l.id)}>
               <span>{l.kind === "grocery" ? "🛒" : l.kind === "chores" ? "🧹" : l.kind === "packing" ? "🧳" : "📝"}</span>{l.title}
               {!l.shared && <span className="chip" style={{ marginLeft: "auto" }}>private</span>}
             </button>
           ))}
           {!lists.loading && !lists.data?.length && <p className="muted" style={{ padding: 8 }}>No lists yet</p>}
         </div>
-        <form className="card" onSubmit={createList}>
+        <form className="card list-new" onSubmit={createList}>
           <h3 style={{ marginTop: 0 }}>New list</h3>
           <input className="input" placeholder="Groceries" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={80} />
           <select className="input" style={{ marginTop: 8 }} value={kind} onChange={(e) => { setKind(e.target.value); setShared(["grocery", "chores"].includes(e.target.value)); }}>
@@ -169,7 +169,7 @@ function Lists({ me, house, members, profile }: { me: Member; house: House; memb
           <button className="btn sm primary">Create</button>
         </form>
         {board.total > 0 && (
-          <div className="card">
+          <div className="card list-board">
             <h3 style={{ marginTop: 0 }}>Chores, last 2 weeks</h3>
             {board.rows.map((r) => (
               <div key={r.m.id} style={{ marginBottom: 8 }}>
@@ -181,7 +181,7 @@ function Lists({ me, house, members, profile }: { me: Member; house: House; memb
         )}
       </div>
 
-      <div className="card">
+      <div className="card list-main">
         {!cur ? <Empty title="Make your first list">Groceries and chores are shared with the family by default.</Empty> : (
           <>
             <div className="row spread wrap" style={{ marginBottom: 10 }}>

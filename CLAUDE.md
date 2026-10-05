@@ -51,14 +51,13 @@ GitHub: `SUPABASE_ACCESS_TOKEN` (set); later `GOOGLE_SERVICES_JSON`, `ANDROID_KE
 The web publishable key in `web/.env.production` is public by design.
 
 ## Open items (most important first)
-1. **Clean up QA test data**: household "QA House", users `qa.parent@example.com` and `qa.partner@example.com`, and the `qa` schema in the database. Their password was shared in a chat, so delete them.
-2. **Google verification** (blocks growth past 100 Gmail users): buy a domain, host the privacy page at a real `/privacy` path, OAuth screen, demo video, CASA security assessment.
-3. **Phone push**: Firebase project (`google-services.json` to GitHub, service account to Supabase) and APNs key; store accounts (Google Play, Apple Developer). Then `VITE_NATIVE_PUSH=1` is set by CI automatically.
-4. **Texting**: Sendblue (iMessage, SMS fallback) or Twilio (SMS needs A2P 10DLC). WhatsApp only for EU numbers (Meta bans AI assistants elsewhere).
-5. **Family inbox**: Postmark account, set `POSTMARK_INBOUND_ADDRESS`, paste the webhook from Settings (admin) into Postmark.
-6. **Book and buy** (Phase 2): cloud browser (Browserbase) plus a long running worker. Not built.
-7. Stripe for paid plans; prompt caching for chores; move first run to Family; real users (5 families) before more features.
-8. Pat works at Intuitive Surgical: keep Twofold off work devices and check the employment agreement before raising.
+1. **Google verification** (blocks growth past 100 Gmail users): buy a domain, host the privacy page at a real `/privacy` path, OAuth screen, demo video, CASA security assessment.
+2. **Phone push**: Firebase project (`google-services.json` to GitHub, service account to Supabase) and APNs key; store accounts (Google Play, Apple Developer). Then `VITE_NATIVE_PUSH=1` is set by CI automatically.
+3. **Texting**: Sendblue (iMessage, SMS fallback) or Twilio (SMS needs A2P 10DLC). WhatsApp only for EU numbers (Meta bans AI assistants elsewhere).
+4. **Family inbox**: Postmark account, set `POSTMARK_INBOUND_ADDRESS`, paste the webhook from Settings (admin) into Postmark.
+5. **Book and buy** (Phase 2): cloud browser (Browserbase) plus a long running worker. Not built.
+6. Stripe for paid plans; prompt caching for chores; move first run to Family; real users (5 families) before more features.
+7. Pat works at Intuitive Surgical: keep Twofold off work devices and check the employment agreement before raising.
 
 ## How to check work
 - Backend type check: `cd supabase/functions/api && deno check index.ts`

@@ -133,20 +133,6 @@ export default function Home({ profile }: { profile: Profile }) {
         </a>
       )}
 
-      {pushSupported() && pushOn.data === false && (
-        <div className="notice row spread wrap" style={{ marginBottom: 12 }}>
-          <span>Turn on notifications so reminders actually reach you.</span>
-          <button className="btn sm primary" onClick={async () => { const m = await enablePush(profile.id); if (m) setErr(m); pushOn.reload(); }}>Turn on</button>
-        </div>
-      )}
-
-      {f && (proposals.data ?? []).length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <div className="muted" style={{ fontSize: 13, fontWeight: 600, margin: "0 0 4px 2px" }}>✦ Twofold suggests</div>
-          {(proposals.data ?? []).map((p) => <ProposalCard key={p.id} p={p} me={f.me as any} members={f.members as any} onDone={() => { proposals.reload(); reloadAll(); }} />)}
-        </div>
-      )}
-
       {/* quick add */}
       <form className="card" onSubmit={add} style={{ padding: 12 }}>
         <div className="row">
@@ -173,21 +159,8 @@ export default function Home({ profile }: { profile: Profile }) {
       {celebrate && <div className="success" style={{ marginBottom: 12 }}>✅ {celebrate}</div>}
       <ErrorBox msg={err} />
 
-      {/* rides */}
-      {needDriver.length > 0 && (
-        <div className="card" style={{ borderLeft: "4px solid var(--warn)" }}>
-          <strong>🚗 Rides with no driver</strong>
-          {needDriver.map((e) => (
-            <div key={e.id} className="item">
-              <div className="grow"><div className="title">{e.title}</div><div className="sub">{new Date(e.start_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })} · {e.member_ids.map(nameOf).filter(Boolean).join(", ")}</div></div>
-              {me && (me.role === "owner" || me.role === "adult") && <button className="btn sm gold" onClick={() => claimRide(e)}>I will drive</button>}
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* today */}
-      <div className="row spread" style={{ margin: "18px 0 8px" }}>
+      <div className="row spread" style={{ margin: "4px 0 8px" }}>
         <h2 style={{ margin: 0 }}>Today</h2>
         {f && (
           <div className="row" style={{ gap: 4 }}>
@@ -228,6 +201,33 @@ export default function Home({ profile }: { profile: Profile }) {
             ))}
           </div>
         </>
+      )}
+
+      {/* rides */}
+      {needDriver.length > 0 && (
+        <div className="card" style={{ borderLeft: "4px solid var(--warn)" }}>
+          <strong>🚗 Rides with no driver</strong>
+          {needDriver.map((e) => (
+            <div key={e.id} className="item">
+              <div className="grow"><div className="title">{e.title}</div><div className="sub">{new Date(e.start_at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })} · {e.member_ids.map(nameOf).filter(Boolean).join(", ")}</div></div>
+              {me && (me.role === "owner" || me.role === "adult") && <button className="btn sm gold" onClick={() => claimRide(e)}>I will drive</button>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {f && (proposals.data ?? []).length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div className="muted" style={{ fontSize: 13, fontWeight: 600, margin: "0 0 4px 2px" }}>✦ Twofold suggests</div>
+          {(proposals.data ?? []).map((p) => <ProposalCard key={p.id} p={p} me={f.me as any} members={f.members as any} onDone={() => { proposals.reload(); reloadAll(); }} />)}
+        </div>
+      )}
+
+      {pushSupported() && pushOn.data === false && (
+        <div className="notice row spread wrap" style={{ marginBottom: 12 }}>
+          <span>Turn on notifications so reminders actually reach you.</span>
+          <button className="btn sm primary" onClick={async () => { const m = await enablePush(profile.id); if (m) setErr(m); pushOn.reload(); }}>Turn on</button>
+        </div>
       )}
 
       {/* streaks */}
